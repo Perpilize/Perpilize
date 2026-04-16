@@ -1,0 +1,25 @@
+syntax = "proto3";
+
+package perpilize.settlement.v1;
+
+import "cosmos/msg/v1/msg.proto";
+import "perpilize/settlement/v1/settlement.proto";
+
+option go_package = "github.com/perpilize/perpilize/x/settlement/types";
+
+service Msg {
+  option (cosmos.msg.v1.service) = true;
+
+  rpc SettleMatchedOrders(MsgSettleMatchedOrders) returns (MsgSettleMatchedOrdersResponse);
+}
+
+message MsgSettleMatchedOrders {
+  option (cosmos.msg.v1.signer) = "matcher";
+
+  string matcher = 1;
+  repeated MatchedTrade trades = 2;
+}
+
+message MsgSettleMatchedOrdersResponse {
+  uint64 settlement_batch_id = 1;
+}

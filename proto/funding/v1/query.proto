@@ -1,0 +1,22 @@
+syntax = "proto3";
+
+package perpilize.funding.v1;
+
+import "google/api/annotations.proto";
+import "perpilize/funding/v1/funding.proto";
+
+option go_package = "github.com/perpilize/perpilize/x/funding/types";
+
+service Query {
+  rpc MarketFunding(QueryMarketFundingRequest) returns (QueryMarketFundingResponse) {
+    option (google.api.http).get = "/perpilize/funding/v1/rate/{market_id}";
+  }
+}
+
+message QueryMarketFundingRequest {
+  string market_id = 1;
+}
+
+message QueryMarketFundingResponse {
+  FundingRate rate = 1;
+}

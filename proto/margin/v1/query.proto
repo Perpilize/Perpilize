@@ -1,0 +1,39 @@
+syntax = "proto3";
+
+package perpilize.margin.v1;
+
+import "google/api/annotations.proto";
+import "perpilize/margin/v1/margin.proto";
+
+option go_package = "github.com/perpilize/perpilize/x/margin/types";
+
+service Query {
+  rpc Params(QueryParamsRequest) returns (QueryParamsResponse) {
+    option (google.api.http).get = "/perpilize/margin/v1/params";
+  }
+
+  rpc MarginAccount(QueryMarginAccountRequest) returns (QueryMarginAccountResponse) {
+    option (google.api.http).get = "/perpilize/margin/v1/account/{owner}";
+  }
+
+  rpc MarginRisk(QueryMarginAccountRequest) returns (QueryMarginRiskResponse) {
+    option (google.api.http).get = "/perpilize/margin/v1/risk/{owner}";
+  }
+}
+
+message QueryParamsRequest {}
+message QueryParamsResponse {
+  Params params = 1;
+}
+
+message QueryMarginAccountRequest {
+  string owner = 1;
+}
+
+message QueryMarginAccountResponse {
+  MarginAccount account = 1;
+}
+
+message QueryMarginRiskResponse {
+  MarginRisk risk = 1;
+}

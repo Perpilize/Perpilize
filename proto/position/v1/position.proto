@@ -1,0 +1,23 @@
+syntax = "proto3";
+
+package perpilize.position.v1;
+
+import "gogoproto/gogo.proto";
+
+option go_package = "github.com/perpilize/perpilize/x/position/types";
+
+message Params {
+  uint64 max_global_leverage = 1;
+}
+
+message Position {
+  string owner = 1;
+  string market_id = 2;
+
+  string size = 3 [(gogoproto.customtype) = "sdk.Dec"];
+  string avg_entry_price = 4 [(gogoproto.customtype) = "sdk.Dec"];
+
+  string last_cumulative_funding = 5 [(gogoproto.customtype) = "sdk.Dec"];
+
+  string margin = 6 [(gogoproto.customtype) = "sdk.Dec"];
+}

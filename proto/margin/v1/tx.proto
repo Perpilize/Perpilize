@@ -1,0 +1,33 @@
+syntax = "proto3";
+
+package perpilize.margin.v1;
+
+import "cosmos/msg/v1/msg.proto";
+import "cosmos/base/v1beta1/coin.proto";
+
+option go_package = "github.com/perpilize/perpilize/x/margin/types";
+
+service Msg {
+  option (cosmos.msg.v1.service) = true;
+
+  rpc DepositCollateral(MsgDepositCollateral) returns (MsgDepositCollateralResponse);
+  rpc WithdrawCollateral(MsgWithdrawCollateral) returns (MsgWithdrawCollateralResponse);
+}
+
+message MsgDepositCollateral {
+  option (cosmos.msg.v1.signer) = "depositor";
+
+  string depositor = 1;
+  cosmos.base.v1beta1.Coin amount = 2;
+}
+
+message MsgDepositCollateralResponse {}
+
+message MsgWithdrawCollateral {
+  option (cosmos.msg.v1.signer) = "withdrawer";
+
+  string withdrawer = 1;
+  cosmos.base.v1beta1.Coin amount = 2;
+}
+
+message MsgWithdrawCollateralResponse {}

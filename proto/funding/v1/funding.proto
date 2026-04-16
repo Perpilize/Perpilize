@@ -1,0 +1,20 @@
+syntax = "proto3";
+
+package perpilize.funding.v1;
+
+import "gogoproto/gogo.proto";
+
+option go_package = "github.com/perpilize/perpilize/x/funding/types";
+
+message Params {
+  int64 funding_interval_seconds = 1;
+}
+
+message FundingRate {
+  string market_id = 1;
+
+  string current_rate = 2 [(gogoproto.customtype) = "sdk.Dec"];
+  string cumulative_rate = 3 [(gogoproto.customtype) = "sdk.Dec"];
+
+  int64 last_updated_timestamp = 4;
+}

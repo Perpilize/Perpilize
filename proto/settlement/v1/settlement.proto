@@ -1,0 +1,25 @@
+syntax = "proto3";
+
+package perpilize.settlement.v1;
+
+import "gogoproto/gogo.proto";
+
+option go_package = "github.com/perpilize/perpilize/x/settlement/types";
+
+message Params {
+  string authorized_matcher_address = 1;
+
+  string maker_fee_rate = 2 [(gogoproto.customtype) = "sdk.Dec"];
+  string taker_fee_rate = 3 [(gogoproto.customtype) = "sdk.Dec"];
+}
+
+message MatchedTrade {
+  string maker_address = 1;
+  string taker_address = 2;
+  string market_id = 3;
+
+  string execution_price = 4 [(gogoproto.customtype) = "sdk.Dec"];
+  string size = 5 [(gogoproto.customtype) = "sdk.Dec"];
+
+  bool is_taker_long = 6;
+}

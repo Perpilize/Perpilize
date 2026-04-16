@@ -1,0 +1,44 @@
+syntax = "proto3";
+
+package perpilize.margin.v1;
+
+import "gogoproto/gogo.proto";
+import "cosmos/base/v1beta1/coin.proto";
+
+option go_package = "github.com/perpilize/perpilize/x/margin/types";
+
+message Params {
+  option (gogoproto.goproto_stringer) = false;
+
+  string global_imf = 1 [
+    (gogoproto.customtype) = "github.com/cosmos/cosmos-sdk/types.Dec",
+    (gogoproto.nullable) = false
+  ];
+
+  string global_mmf = 2 [
+    (gogoproto.customtype) = "github.com/cosmos/cosmos-sdk/types.Dec",
+    (gogoproto.nullable) = false
+  ];
+
+  string partial_liquidation_ratio = 3 [
+    (gogoproto.customtype) = "github.com/cosmos/cosmos-sdk/types.Dec",
+    (gogoproto.nullable) = false
+  ];
+}
+
+message MarginAccount {
+  string owner = 1;
+
+  repeated cosmos.base.v1beta1.Coin collateral = 2 [
+    (gogoproto.castrepeated) = "github.com/cosmos/cosmos-sdk/types.Coins",
+    (gogoproto.nullable) = false
+  ];
+}
+
+message MarginRisk {
+  string equity = 1 [(gogoproto.customtype) = "sdk.Dec"];
+  string imr = 2 [(gogoproto.customtype) = "sdk.Dec"];
+  string mmr = 3 [(gogoproto.customtype) = "sdk.Dec"];
+  string health_ratio = 4 [(gogoproto.customtype) = "sdk.Dec"];
+  bool is_liquidatable = 5;
+}

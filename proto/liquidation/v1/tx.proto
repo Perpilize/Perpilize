@@ -1,0 +1,25 @@
+syntax = "proto3";
+
+package perpilize.liquidation.v1;
+
+import "cosmos/msg/v1/msg.proto";
+
+option go_package = "github.com/perpilize/perpilize/x/liquidation/types";
+
+service Msg {
+  option (cosmos.msg.v1.service) = true;
+
+  rpc Liquidate(MsgLiquidate) returns (MsgLiquidateResponse);
+}
+
+message MsgLiquidate {
+  option (cosmos.msg.v1.signer) = "liquidator";
+
+  string liquidator = 1;
+  string target_account = 2;
+  string market_id = 3;
+}
+
+message MsgLiquidateResponse {
+  string rewarded_amount = 1 [(gogoproto.customtype) = "sdk.Dec"];
+}
