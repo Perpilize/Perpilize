@@ -1,0 +1,27 @@
+{
+  "chain_id": "perpilize-1",
+  "app_state": {
+    "margin": {
+      "params": {
+        "global_imf": "0.10",
+        "global_mmf": "0.05",
+        "partial_liquidation_ratio": "0.50"
+      }
+    },
+    "funding": {
+      "params": {
+        "funding_interval_seconds": 3600
+      }
+    },
+    "settlement": {
+      "params": {
+        "authorized_matcher_address": "perpilize1matcher",
+        "maker_fee_rate": "0.0002",
+        "taker_fee_rate": "0.0005"
+      }
+    },
+    "oracle": {},
+    "position": {},
+    "liquidation": {}
+  }
+}

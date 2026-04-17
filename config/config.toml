@@ -1,0 +1,3 @@
+moniker = "perpilize-node"
+fast_sync = true
+timeout_commit = "1s"

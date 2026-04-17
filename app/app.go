@@ -1,163 +1,245 @@
 package app
 
 import (
+	"encoding/json"
 	"io"
-	"os"
 
-	sdk "github.com/cosmos/cosmos-sdk/types"
+	abci "github.com/cometbft/cometbft/abci/types"
+
 	"github.com/cosmos/cosmos-sdk/baseapp"
-	"github.com/cosmos/cosmos-sdk/server"
-	"github.com/cosmos/cosmos-sdk/store"
-	"github.com/cosmos/cosmos-sdk/x/auth"
-	authkeeper "github.com/cosmos/cosmos-sdk/x/auth/keeper"
-	"github.com/cosmos/cosmos-sdk/x/bank"
-	bankkeeper "github.com/cosmos/cosmos-sdk/x/bank/keeper"
-	"github.com/cosmos/cosmos-sdk/x/params"
+	sdk "github.com/cosmos/cosmos-sdk/types"
+	storetypes "cosmossdk.io/store/types"
+	"github.com/cosmos/cosmos-sdk/codec"
+	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
+	"github.com/cosmos/cosmos-sdk/types/module"
 
-	ethermint "github.com/evmos/ethermint/app"
-	evmkeeper "github.com/evmos/ethermint/x/evm/keeper"
+	paramkeeper "github.com/cosmos/cosmos-sdk/x/params/keeper"
+	params "github.com/cosmos/cosmos-sdk/x/params/types"
 
-	"github.com/initia-labs/initia/x/mstaking"
-	initiavm "github.com/initia-labs/initia/x/evm"
-
-	"github.com/perpilize/perpilize/x/oracle"
-	oraclekeeper "github.com/perpilize/perpilize/x/oracle/keeper"
-
-	"github.com/perpilize/perpilize/x/margin"
+	margin "github.com/perpilize/perpilize/x/margin"
 	marginkeeper "github.com/perpilize/perpilize/x/margin/keeper"
+	margintypes "github.com/perpilize/perpilize/x/margin/types"
 
-	"github.com/perpilize/perpilize/x/funding"
-	fundingkeeper "github.com/perpilize/perpilize/x/funding/keeper"
-
-	"github.com/perpilize/perpilize/x/position"
+	position "github.com/perpilize/perpilize/x/position"
 	positionkeeper "github.com/perpilize/perpilize/x/position/keeper"
 
-	"github.com/perpilize/perpilize/x/liquidation"
-	liqkeeper "github.com/perpilize/perpilize/x/liquidation/keeper"
+	settlement "github.com/perpilize/perpilize/x/settlement"
+	settlementkeeper "github.com/perpilize/perpilize/x/settlement/keeper"
+	settlementtypes "github.com/perpilize/perpilize/x/settlement/types"
 
-	"github.com/perpilize/perpilize/x/insurance"
-	insurancekeeper "github.com/perpilize/perpilize/x/insurance/keeper"
+	funding "github.com/perpilize/perpilize/x/funding"
+	fundingkeeper "github.com/perpilize/perpilize/x/funding/keeper"
 
-	"github.com/perpilize/perpilize/x/fee"
-	feekeeper "github.com/perpilize/perpilize/x/fee/keeper"
+	oracle "github.com/perpilize/perpilize/x/oracle"
+	oraclekeeper "github.com/perpilize/perpilize/x/oracle/keeper"
 
-	"github.com/perpilize/perpilize/x/admin"
-	adminkeeper "github.com/perpilize/perpilize/x/admin/keeper"
-
-	"github.com/perpilize/perpilize/x/settlement"
-	settlekeeper "github.com/perpilize/perpilize/x/settlement/keeper"
-
-	"github.com/perpilize/perpilize/x/interrollup"
-	interrollupkeeper "github.com/perpilize/perpilize/x/interrollup/keeper"
+	liquidation "github.com/perpilize/perpilize/x/liquidation"
+	liquidationkeeper "github.com/perpilize/perpilize/x/liquidation/keeper"
 )
 
-type PerpilizeApp struct {
+type App struct {
 	*baseapp.BaseApp
 
-	AccountKeeper    authkeeper.AccountKeeper
-	BankKeeper       bankkeeper.Keeper
-	EvmKeeper        *evmkeeper.Keeper
+	appCodec codec.Codec
+	cdc      *codec.LegacyAmino
+	registry codectypes.InterfaceRegistry
 
-	OracleKeeper     oraclekeeper.Keeper
-	MarginKeeper     marginkeeper.Keeper
-	FundingKeeper    fundingkeeper.Keeper
-	PositionKeeper   positionkeeper.Keeper
-	LiquidationKeeper liqkeeper.Keeper
-	InsuranceKeeper  insurancekeeper.Keeper
-	FeeKeeper        feekeeper.Keeper
-	AdminKeeper      adminkeeper.Keeper
-	SettlementKeeper settlekeeper.Keeper
-	InterrollupKeeper interrollupkeeper.Keeper
+	keys map[string]*storetypes.KVStoreKey
+
+	ParamsKeeper      paramkeeper.Keeper
+	MarginKeeper      marginkeeper.Keeper
+	PositionKeeper    positionkeeper.Keeper
+	SettlementKeeper  settlementkeeper.Keeper
+	FundingKeeper     fundingkeeper.Keeper
+	OracleKeeper      oraclekeeper.Keeper
+	LiquidationKeeper liquidationkeeper.Keeper
+
+	mm *module.Manager
 }
 
-func NewPerpilizeApp(
-	logger io.Writer,
-	db sdk.DB,
-	traceStore io.Writer,
-	loadLatest bool,
-) *PerpilizeApp {
+func NewApp(logger io.Writer) *App {
+	interfaceRegistry := codectypes.NewInterfaceRegistry()
+	appCodec := codec.NewProtoCodec(interfaceRegistry)
+	amino := codec.NewLegacyAmino()
 
-	encoding := MakeEncodingConfig()
+	bApp := baseapp.NewBaseApp("perpilize", logger, nil, nil)
 
-	bApp := baseapp.NewBaseApp(
-		"perpilized",
-		logger,
-		db,
-		encoding.TxConfig.TxDecoder(),
-	)
-
-	// Register stores
-	keys := sdk.NewKVStoreKeys(
-		auth.StoreKey,
-		bank.StoreKey,
-		params.StoreKey,
-		initiavm.StoreKey,
-		oracle.StoreKey,
-		margin.StoreKey,
-		funding.StoreKey,
-		position.StoreKey,
-		liquidation.StoreKey,
-		insurance.StoreKey,
-		fee.StoreKey,
-		admin.StoreKey,
-		settlement.StoreKey,
-		interrollup.StoreKey,
-	)
-
-	bApp.MountKVStores(keys)
-
-	// Base keepers
-	accountKeeper := authkeeper.NewAccountKeeper(
-		encoding.Codec,
-		keys[auth.StoreKey],
-		auth.ProtoBaseAccount,
-		mstaking.AddressCodec{},
-	)
-
-	bankKeeper := bankkeeper.NewBaseKeeper(
-		encoding.Codec,
-		keys[bank.StoreKey],
-		accountKeeper,
-		nil,
-	)
-
-	// EVM
-	evmKeeper := evmkeeper.NewKeeper(
-		encoding.Codec,
-		keys[initiavm.StoreKey],
-		accountKeeper,
-		bankKeeper,
-		nil,
-	)
-
-	// Perpilize native modules
-	oracleKeeper := oraclekeeper.NewKeeper(encoding.Codec, keys[oracle.StoreKey])
-	marginKeeper := marginkeeper.NewKeeper(encoding.Codec, keys[margin.StoreKey])
-	fundingKeeper := fundingkeeper.NewKeeper(encoding.Codec, keys[funding.StoreKey])
-	positionKeeper := positionkeeper.NewKeeper(encoding.Codec, keys[position.StoreKey])
-	liqKeeper := liqkeeper.NewKeeper(encoding.Codec, keys[liquidation.StoreKey])
-	insuranceKeeper := insurancekeeper.NewKeeper(encoding.Codec, keys[insurance.StoreKey])
-	feeKeeper := feekeeper.NewKeeper(encoding.Codec, keys[fee.StoreKey])
-	adminKeeper := adminkeeper.NewKeeper(encoding.Codec, keys[admin.StoreKey])
-	settleKeeper := settlekeeper.NewKeeper(encoding.Codec, keys[settlement.StoreKey])
-	interKeeper := interrollupkeeper.NewKeeper(encoding.Codec, keys[interrollup.StoreKey])
-
-	app := &PerpilizeApp{
-		BaseApp:          bApp,
-		AccountKeeper:    accountKeeper,
-		BankKeeper:       bankKeeper,
-		EvmKeeper:        evmKeeper,
-		OracleKeeper:     oracleKeeper,
-		MarginKeeper:     marginKeeper,
-		FundingKeeper:    fundingKeeper,
-		PositionKeeper:   positionKeeper,
-		LiquidationKeeper: liqKeeper,
-		InsuranceKeeper:  insuranceKeeper,
-		FeeKeeper:        feeKeeper,
-		AdminKeeper:      adminKeeper,
-		SettlementKeeper: settleKeeper,
-		InterrollupKeeper: interKeeper,
+	keys := map[string]*storetypes.KVStoreKey{
+		"margin":      storetypes.NewKVStoreKey("margin"),
+		"position":    storetypes.NewKVStoreKey("position"),
+		"settlement":  storetypes.NewKVStoreKey("settlement"),
+		"funding":     storetypes.NewKVStoreKey("funding"),
+		"oracle":      storetypes.NewKVStoreKey("oracle"),
+		"liquidation": storetypes.NewKVStoreKey("liquidation"),
+		"params":      storetypes.NewKVStoreKey("params"),
 	}
 
+	app := &App{
+		BaseApp:  bApp,
+		appCodec: appCodec,
+		cdc:      amino,
+		registry: interfaceRegistry,
+		keys:     keys,
+	}
+
+	// -------------------------
+	// Params
+	// -------------------------
+	app.ParamsKeeper = paramkeeper.NewKeeper(
+		appCodec,
+		amino,
+		keys["params"],
+	)
+
+	_ = app.ParamsKeeper.Subspace("margin").WithKeyTable(params.NewKeyTable())
+	_ = app.ParamsKeeper.Subspace("position")
+	_ = app.ParamsKeeper.Subspace("settlement")
+	_ = app.ParamsKeeper.Subspace("funding")
+	_ = app.ParamsKeeper.Subspace("liquidation")
+
+	// -------------------------
+	// Keepers (dependency order matters)
+	// -------------------------
+
+	// 1. Oracle — no dependencies
+	app.OracleKeeper = oraclekeeper.NewKeeper(
+		appCodec,
+		keys["oracle"],
+	)
+
+	// 2. Funding — depends on oracle
+	app.FundingKeeper = fundingkeeper.NewKeeper(
+		appCodec,
+		keys["funding"],
+		app.OracleKeeper,
+	)
+
+	// 3. Position — no keeper dependencies (oracle read via margin)
+	app.PositionKeeper = positionkeeper.NewKeeper(
+		appCodec,
+		keys["position"],
+	)
+
+	// 4. Settlement — depends on position + funding
+	//    NOTE: Does NOT take margin keeper here — that would create a cycle.
+	//    MarginKeeper is injected post-construction via SetMarginKeeper().
+	app.SettlementKeeper = settlementkeeper.NewKeeper(
+		appCodec,
+		keys["settlement"],
+		app.PositionKeeper,
+		app.FundingKeeper,
+		settlementtypes.DefaultParams(),
+	)
+
+	// 5. Margin — depends on oracle, funding, position, settlement
+	app.MarginKeeper = marginkeeper.NewKeeper(
+		appCodec,
+		keys["margin"],
+		app.OracleKeeper,
+		app.FundingKeeper,
+		app.PositionKeeper,
+		app.SettlementKeeper,
+	)
+
+	// 6. Break the settlement→margin cycle: inject MarginKeeper post-construction.
+	//    Settlement needs margin only for DeductMargin() inside ExecuteTrade().
+	app.SettlementKeeper.SetMarginKeeper(margintypes.MarginKeeperAdapter{Keeper: app.MarginKeeper})
+
+	// 7. Liquidation — depends on margin + position + oracle
+	app.LiquidationKeeper = liquidationkeeper.NewKeeper(
+		appCodec,
+		keys["liquidation"],
+		app.MarginKeeper,
+		app.PositionKeeper,
+		app.OracleKeeper,
+	)
+
+	// -------------------------
+	// Module wiring
+	// -------------------------
+	marginModule := margin.NewAppModule(appCodec, app.MarginKeeper)
+	positionModule := position.NewAppModule(appCodec, app.PositionKeeper)
+	settlementModule := settlement.NewAppModule(appCodec, app.SettlementKeeper)
+	fundingModule := funding.NewAppModule(appCodec, app.FundingKeeper)
+	oracleModule := oracle.NewAppModule(appCodec, app.OracleKeeper)
+	liquidationModule := liquidation.NewAppModule(appCodec, app.LiquidationKeeper)
+
+	app.mm = module.NewManager(
+		oracleModule,
+		fundingModule,
+		positionModule,
+		marginModule,
+		settlementModule,
+		liquidationModule,
+	)
+
+	// BeginBlock order:
+	//   1. funding  — update cumulative funding indices for all markets
+	//   2. position — any position-level begin-block work
+	app.mm.SetOrderBeginBlockers(
+		"oracle",
+		"funding",
+		"position",
+	)
+
+	// EndBlock order:
+	//   1. margin      — scan all accounts, auto-liquidate unhealthy ones
+	//   2. liquidation — process any externally submitted MsgLiquidate messages
+	app.mm.SetOrderEndBlockers(
+		"margin",
+		"liquidation",
+	)
+
+	app.mm.SetOrderInitGenesis(
+		"oracle",
+		"funding",
+		"position",
+		"margin",
+		"settlement",
+		"liquidation",
+	)
+
+	app.mm.SetOrderExportGenesis(
+		"oracle",
+		"funding",
+		"position",
+		"margin",
+		"settlement",
+		"liquidation",
+	)
+
+	app.MountKVStores(keys)
+
+	app.SetInitChainer(app.InitChainer)
+	app.SetBeginBlocker(app.BeginBlocker)
+	app.SetEndBlocker(app.EndBlocker)
+
+	app.RegisterServices()
+
 	return app
+}
+
+// -------------------------
+// ABCI lifecycle hooks
+// -------------------------
+
+func (app *App) InitChainer(ctx sdk.Context, req abci.RequestInitChain) abci.ResponseInitChain {
+	var genesisState map[string]json.RawMessage
+	if err := json.Unmarshal(req.AppStateBytes, &genesisState); err != nil {
+		panic(err)
+	}
+	return app.mm.InitGenesis(ctx, app.appCodec, genesisState)
+}
+
+func (app *App) BeginBlocker(ctx sdk.Context, req abci.RequestBeginBlock) abci.ResponseBeginBlock {
+	return app.mm.BeginBlock(ctx, req)
+}
+
+func (app *App) EndBlocker(ctx sdk.Context, req abci.RequestEndBlock) abci.ResponseEndBlock {
+	return app.mm.EndBlock(ctx, req)
+}
+
+func (app *App) RegisterServices() {
+	// Register gRPC query and tx services for each module here.
+	// Example: settlementtypes.RegisterMsgServer(app.MsgServiceRouter(), app.SettlementKeeper)
 }

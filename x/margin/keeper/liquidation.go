@@ -2,94 +2,56 @@ package keeper
 
 import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
+
+	"github.com/perpilize/perpilize/x/margin/types"
 )
 
-func (k Keeper) ShouldLiquidate(ctx sdk.Context, addr string) (bool, error) {
-	hr, err := k.HealthRatio(ctx, addr)
-	if err != nil {
-		return false, err
+// DeductMargin reduces the collateral of an account by amount.
+// Used by the settlement keeper when opening a position.
+func (k Keeper) DeductMargin(ctx sdk.Context, addr string, amount sdk.Dec) error {
+	if amount.IsNegative() || amount.IsZero() {
+		return types.ErrInvalidAmount
 	}
-	return hr.LT(sdk.OneDec()), nil
-}
-
-// Entry point
-func (k Keeper) Liquidate(ctx sdk.Context, addr string) error {
-
-	should, err := k.ShouldLiquidate(ctx, addr)
-	if err != nil {
-		return err
+	acc := k.GetAccount(ctx, addr)
+	if acc.Collateral.LT(amount) {
+		return types.ErrInsufficientCollateral
 	}
-	if !should {
-		return nil
-	}
-
-	// Step 1: Partial liquidation
-	err = k.executePartial(ctx, addr)
-	if err != nil {
-		return err
-	}
-
-	// Step 2: Recheck
-	hr, err := k.HealthRatio(ctx, addr)
-	if err != nil {
-		return err
-	}
-
-	if hr.LT(sdk.OneDec()) {
-		return k.executeFull(ctx, addr)
-	}
-
+	acc.Collateral = acc.Collateral.Sub(amount)
+	k.SetAccount(ctx, acc)
 	return nil
 }
 
-func (k Keeper) executePartial(ctx sdk.Context, addr string) error {
+// ExecuteLiquidation reduces a position by partialRate and deducts the
+// liquidation penalty from the account's collateral.
+// Called by the liquidation keeper when processing MsgLiquidate.
+func (k Keeper) ExecuteLiquidation(ctx sdk.Context, addr, marketID string, partialRate sdk.Dec) error {
+	markPrice, _, err := k.oracle.GetPrice(ctx, marketID)
+	if err != nil {
+		return err
+	}
 
 	positions := k.position.GetPositions(ctx, addr)
+	acc := k.GetAccount(ctx, addr)
 
 	for _, pos := range positions {
+		if pos.MarketID != marketID {
+			continue
+		}
 
-		reduce := pos.Size.Mul(k.params.PartialLiquidationRate)
+		notional := pos.Size.Abs().Mul(markPrice).Mul(partialRate)
+		penaltyAmount := notional.Mul(k.params.LiquidationPenaltyMin)
 
-		err := k.sendLiquidationOrder(ctx, addr, pos.MarketID, reduce)
-		if err != nil {
+		acc.Collateral = acc.Collateral.Sub(penaltyAmount)
+		if acc.Collateral.IsNegative() {
+			acc.Collateral = sdk.ZeroDec()
+		}
+
+		// Reduce the position
+		if err := k.position.ReducePosition(ctx, addr, marketID, partialRate); err != nil {
 			return err
 		}
 	}
 
-	return nil
-}
-
-func (k Keeper) executeFull(ctx sdk.Context, addr string) error {
-
-	positions := k.position.GetPositions(ctx, addr)
-
-	for _, pos := range positions {
-
-		err := k.sendLiquidationOrder(ctx, addr, pos.MarketID, pos.Size)
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-// Matching engine hook
-func (k Keeper) sendLiquidationOrder(
-	ctx sdk.Context,
-	addr string,
-	market string,
-	size sdk.Dec,
-) error {
-
-	ctx.EventManager().EmitEvent(
-		sdk.NewEvent(
-			"liquidation_order",
-			sdk.NewAttribute("trader", addr),
-			sdk.NewAttribute("market", market),
-			sdk.NewAttribute("size", size.String()),
-		),
-	)
-
+	k.SetAccount(ctx, acc)
 	return nil
 }

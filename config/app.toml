@@ -1,0 +1,2 @@
+minimum-gas-prices = "0.001uperp"
+pruning = "default"

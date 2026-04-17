@@ -1,2 +1,4 @@
 #!/bin/bash
-echo Building Perpilize
+
+echo "Building perpilized..."
+go build -o perpilized ./cmd/perpilized

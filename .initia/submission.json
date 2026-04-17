@@ -1,0 +1,14 @@
+{
+  "project_name": "Perpilize",
+  "team": "Perpilize Labs",
+  "chain_id": "perpilize-1",
+  "description": "Institutional-grade perpetual DEX on Initia with custom margin, funding, and liquidation engine.",
+  "features": [
+    "Custom margin engine",
+    "Hyperliquid-style funding",
+    "Off-chain matcher with on-chain settlement",
+    "Deterministic liquidation engine",
+    "Cross-rollup ready architecture"
+  ],
+  "repo": "https://github.com/perpilize/perpilize"
+}
