@@ -1,6 +1,8 @@
 package keeper
 
 import (
+	"cosmossdk.io/math"
+	storetypes "cosmossdk.io/store/types"
 	"github.com/cosmos/cosmos-sdk/codec"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
@@ -9,47 +11,35 @@ import (
 )
 
 type Keeper struct {
-	storeKey sdk.StoreKey
+	storeKey storetypes.StoreKey
 	cdc      codec.BinaryCodec
 	oracle   oraclekeeper.Keeper
 	params   types.Params
 }
 
-func NewKeeper(
-	cdc codec.BinaryCodec,
-	key sdk.StoreKey,
-	oracleKeeper oraclekeeper.Keeper,
-) Keeper {
-	return Keeper{
-		storeKey: key,
-		cdc:      cdc,
-		oracle:   oracleKeeper,
-		params:   types.DefaultParams(),
-	}
+func NewKeeper(cdc codec.BinaryCodec, key storetypes.StoreKey, oracleKeeper oraclekeeper.Keeper) Keeper {
+	return Keeper{storeKey: key, cdc: cdc, oracle: oracleKeeper, params: types.DefaultParams()}
 }
 
-// -------------------------
-// Funding rate computation
-// -------------------------
+// ── Funding rate ─────────────────────────────────────────────────────────────
 
-// ComputeFundingRate calculates the periodic funding rate for a market.
-// Rate = (indexPrice - markPrice) / fundingIntervalSeconds
-// Clamped to ±MaxFundingRate.
-func (k Keeper) ComputeFundingRate(ctx sdk.Context, marketID string, markPrice sdk.Dec) (sdk.Dec, error) {
+// ComputeFundingRate calculates the periodic funding rate.
+// Rate = (indexPrice - markPrice) / intervalSeconds, clamped to ±maxRate.
+func (k Keeper) ComputeFundingRate(ctx sdk.Context, marketID string, markPrice math.LegacyDec) (math.LegacyDec, error) {
 	indexPrice, _, err := k.oracle.GetPrice(ctx, marketID)
 	if err != nil {
-		return sdk.ZeroDec(), err
+		return math.LegacyZeroDec(), err
 	}
 
-	intervalSecs := sdk.NewDec(k.params.FundingIntervalSeconds)
+	intervalSecs := math.LegacyNewDec(k.params.FundingIntervalSeconds)
 	if intervalSecs.IsZero() {
-		intervalSecs = sdk.NewDec(3600) // default 1h
+		intervalSecs = math.LegacyNewDec(3600)
 	}
 
-	delta := indexPrice.Sub(markPrice)
+	delta       := indexPrice.Sub(markPrice)
 	fundingRate := delta.Quo(intervalSecs)
 
-	maxRate := sdk.NewDecWithPrec(int64(k.params.MaxFundingRateBps), 4) // bps → decimal
+	maxRate := math.LegacyNewDecWithPrec(k.params.MaxFundingRateBps, 4) // bps → decimal
 	if fundingRate.GT(maxRate) {
 		fundingRate = maxRate
 	}
@@ -60,77 +50,66 @@ func (k Keeper) ComputeFundingRate(ctx sdk.Context, marketID string, markPrice s
 	return fundingRate, nil
 }
 
-// -------------------------
-// Cumulative funding index
-// -------------------------
-
-// UpdateCumulativeIndex accumulates the latest funding rate into the market-level index.
-// Called every BeginBlock for all active markets.
-func (k Keeper) UpdateCumulativeIndex(ctx sdk.Context, marketID string, rate sdk.Dec) {
-	current := k.GetMarketCumulativeIndex(ctx, marketID)
-	updated := current.Add(rate)
-	k.setMarketCumulativeIndex(ctx, marketID, updated)
+// GetFundingRate returns the last stored funding rate for a market.
+// Satisfies oracle precompile's GetFundingRate call.
+func (k Keeper) GetFundingRate(ctx sdk.Context, marketID string) (math.LegacyDec, error) {
+	return k.GetMarketCumulativeIndex(ctx, marketID), nil
 }
 
-// GetMarketCumulativeIndex returns the global cumulative funding index for a market.
-func (k Keeper) GetMarketCumulativeIndex(ctx sdk.Context, marketID string) sdk.Dec {
+// ── Cumulative index ─────────────────────────────────────────────────────────
+
+func (k Keeper) UpdateCumulativeIndex(ctx sdk.Context, marketID string, rate math.LegacyDec) {
+	current := k.GetMarketCumulativeIndex(ctx, marketID)
+	k.setMarketCumulativeIndex(ctx, marketID, current.Add(rate))
+}
+
+func (k Keeper) GetMarketCumulativeIndex(ctx sdk.Context, marketID string) math.LegacyDec {
 	store := ctx.KVStore(k.storeKey)
-	key := []byte("cumidx:" + marketID)
-	bz := store.Get(key)
+	bz    := store.Get([]byte("cumidx:" + marketID))
 	if bz == nil {
-		return sdk.ZeroDec()
+		return math.LegacyZeroDec()
 	}
-	var dec sdk.Dec
+	var dec math.LegacyDec
 	if err := dec.Unmarshal(bz); err != nil {
-		return sdk.ZeroDec()
+		return math.LegacyZeroDec()
 	}
 	return dec
 }
 
-func (k Keeper) setMarketCumulativeIndex(ctx sdk.Context, marketID string, val sdk.Dec) {
-	store := ctx.KVStore(k.storeKey)
-	key := []byte("cumidx:" + marketID)
-	bz, _ := val.Marshal()
-	store.Set(key, bz)
+func (k Keeper) setMarketCumulativeIndex(ctx sdk.Context, marketID string, val math.LegacyDec) {
+	store    := ctx.KVStore(k.storeKey)
+	bz, _   := val.Marshal()
+	store.Set([]byte("cumidx:"+marketID), bz)
 }
 
-// -------------------------
-// Per-position funding tracking
-// -------------------------
+// ── Per-position funding ─────────────────────────────────────────────────────
 
-// GetCumulativeFunding returns the accumulated funding payment for a specific
-// address+market combination since their last settlement.
-// Implements margin/types.FundingKeeper interface.
-func (k Keeper) GetCumulativeFunding(ctx sdk.Context, marketID string, addr string) (sdk.Dec, error) {
+// GetCumulativeFunding returns accumulated funding for address+market.
+func (k Keeper) GetCumulativeFunding(ctx sdk.Context, marketID string, addr string) (math.LegacyDec, error) {
 	store := ctx.KVStore(k.storeKey)
-	key := []byte("funding:" + marketID + ":" + addr)
-	bz := store.Get(key)
+	bz    := store.Get([]byte("funding:" + marketID + ":" + addr))
 	if bz == nil {
-		return sdk.ZeroDec(), nil
+		return math.LegacyZeroDec(), nil
 	}
-	var dec sdk.Dec
+	var dec math.LegacyDec
 	if err := dec.Unmarshal(bz); err != nil {
-		return sdk.ZeroDec(), err
+		return math.LegacyZeroDec(), err
 	}
 	return dec, nil
 }
 
-// SetCumulativeFunding stores the cumulative funding snapshot for an address+market.
-func (k Keeper) SetCumulativeFunding(ctx sdk.Context, marketID string, addr string, val sdk.Dec) {
-	store := ctx.KVStore(k.storeKey)
-	key := []byte("funding:" + marketID + ":" + addr)
+func (k Keeper) SetCumulativeFunding(ctx sdk.Context, marketID, addr string, val math.LegacyDec) {
+	store  := ctx.KVStore(k.storeKey)
 	bz, _ := val.Marshal()
-	store.Set(key, bz)
+	store.Set([]byte("funding:"+marketID+":"+addr), bz)
 }
 
 // ApplyFunding computes and persists funding payments for all positions in a market.
-// Called from BeginBlock after UpdateCumulativeIndex.
-func (k Keeper) ApplyFunding(ctx sdk.Context, marketID string, markPrice sdk.Dec, positions map[string]sdk.Dec) error {
+func (k Keeper) ApplyFunding(ctx sdk.Context, marketID string, markPrice math.LegacyDec, positions map[string]math.LegacyDec) error {
 	rate, err := k.ComputeFundingRate(ctx, marketID, markPrice)
 	if err != nil {
 		return err
 	}
-
 	k.UpdateCumulativeIndex(ctx, marketID, rate)
 
 	for addr, size := range positions {
@@ -141,14 +120,7 @@ func (k Keeper) ApplyFunding(ctx sdk.Context, marketID string, markPrice sdk.Dec
 		}
 		k.SetCumulativeFunding(ctx, marketID, addr, prev.Add(payment))
 	}
-
 	return nil
 }
 
-// -------------------------
-// Params
-// -------------------------
-
-func (k Keeper) GetParams(ctx sdk.Context) types.Params {
-	return k.params
-}
+func (k Keeper) GetParams(_ sdk.Context) types.Params { return k.params }

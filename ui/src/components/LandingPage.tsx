@@ -7,6 +7,7 @@ import { CircuitPattern } from "./CircuitPattern";
 import { LineChart, Line, ResponsiveContainer, AreaChart, Area } from "recharts";
 import { useChain } from "../hooks";
 import { generateLatencyData, generateThroughputData } from "../utils/mockData";
+import Logoimg from "../assets/Perpilelogo.png";
 
 export function LandingPage({ onEnterApp }: { onEnterApp: () => void }) {
   const { chain } = useChain();
@@ -26,8 +27,8 @@ export function LandingPage({ onEnterApp }: { onEnterApp: () => void }) {
       >
         <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-6">
           <div className="flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded bg-gradient-to-br from-ultramarine-500 to-ultramarine-700">
-              <Network className="h-5 w-5 text-white" />
+            <div className="flex h-8 w-9 items-center justify-center">
+              <img src={Logoimg} alt="Perpilize Logo" />
             </div>
             <span className="font-semibold tracking-tight" style={{ fontSize: "1.125rem" }}>Perpilize</span>
           </div>
@@ -249,9 +250,9 @@ export function LandingPage({ onEnterApp }: { onEnterApp: () => void }) {
           <div className="grid grid-cols-4 gap-8">
             <div>
               <div className="mb-4 flex items-center gap-2">
-                <div className="flex h-8 w-8 items-center justify-center rounded bg-gradient-to-br from-ultramarine-500 to-ultramarine-700">
-                  <Network className="h-5 w-5 text-white" />
-                </div>
+                <div className="flex h-8 w-9 items-center justify-center">
+              <img src={Logoimg} alt="Perpilize Logo" />
+            </div>
                 <span className="font-semibold">Perpilize</span>
               </div>
               <p className="text-sm text-muted-foreground">Institutional perpetual trading on Initia Network.</p>

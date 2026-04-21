@@ -3,58 +3,38 @@ package keeper
 import (
 	"context"
 
+	"cosmossdk.io/math"
 	sdk "github.com/cosmos/cosmos-sdk/types"
+
 	"github.com/perpilize/perpilize/x/margin/types"
 )
 
-type msgServer struct {
-	Keeper
-}
+type msgServer struct{ k Keeper }
 
 func NewMsgServerImpl(k Keeper) types.MsgServer {
-	return &msgServer{Keeper: k}
+	return &msgServer{k}
 }
 
-func (m msgServer) DepositCollateral(
-	goCtx context.Context,
-	msg *types.MsgDepositCollateral,
-) (*types.MsgDepositCollateralResponse, error) {
-
-	ctx := sdk.UnwrapSDKContext(goCtx)
-
-	addr := msg.Depositor
-
-	err := m.settlement.AddCollateral(ctx, addr, sdk.NewDecFromInt(msg.Amount.Amount))
+func (s *msgServer) Deposit(goCtx context.Context, msg *types.MsgDeposit) (*types.MsgDepositResponse, error) {
+	ctx    := sdk.UnwrapSDKContext(goCtx)
+	amount, err := math.LegacyNewDecFromStr(msg.Amount)
 	if err != nil {
 		return nil, err
 	}
-
-	return &types.MsgDepositCollateralResponse{}, nil
+	if err := s.k.Deposit(ctx, msg.Sender, amount); err != nil {
+		return nil, err
+	}
+	return &types.MsgDepositResponse{}, nil
 }
 
-func (m msgServer) WithdrawCollateral(
-	goCtx context.Context,
-	msg *types.MsgWithdrawCollateral,
-) (*types.MsgWithdrawCollateralResponse, error) {
-
-	ctx := sdk.UnwrapSDKContext(goCtx)
-
-	addr := msg.Withdrawer
-	amount := sdk.NewDecFromInt(msg.Amount.Amount)
-
-	err := m.settlement.RemoveCollateral(ctx, addr, amount)
+func (s *msgServer) Withdraw(goCtx context.Context, msg *types.MsgWithdraw) (*types.MsgWithdrawResponse, error) {
+	ctx    := sdk.UnwrapSDKContext(goCtx)
+	amount, err := math.LegacyNewDecFromStr(msg.Amount)
 	if err != nil {
 		return nil, err
 	}
-
-	hr, err := m.HealthRatio(ctx, addr)
-	if err != nil {
+	if err := s.k.Withdraw(ctx, msg.Sender, amount); err != nil {
 		return nil, err
 	}
-
-	if hr.LT(sdk.OneDec()) {
-		return nil, sdk.ErrInsufficientFunds
-	}
-
-	return &types.MsgWithdrawCollateralResponse{}, nil
+	return &types.MsgWithdrawResponse{}, nil
 }

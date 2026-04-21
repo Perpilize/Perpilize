@@ -1,27 +1,87 @@
 {
+  "genesis_time": "2026-04-15T00:00:00Z",
   "chain_id": "perpilize-1",
+  "initial_height": "1",
+  "consensus_params": {
+    "block": {
+      "max_bytes": "22020096",
+      "max_gas":   "30000000"
+    },
+    "evidence": {
+      "max_age_num_blocks": "100000",
+      "max_age_duration":   "172800000000000",
+      "max_bytes":          "1048576"
+    },
+    "validator": {
+      "pub_key_types": ["ed25519"]
+    },
+    "version": {
+      "app": "0"
+    }
+  },
   "app_state": {
     "margin": {
       "params": {
-        "global_imf": "0.10",
-        "global_mmf": "0.05",
-        "partial_liquidation_ratio": "0.50"
-      }
+        "global_imf":                "0.100000000000000000",
+        "global_mmf":                "0.050000000000000000",
+        "partial_liquidation_ratio": "0.500000000000000000"
+      },
+      "accounts": []
     },
     "funding": {
       "params": {
-        "funding_interval_seconds": 3600
+        "funding_interval_seconds": "3600",
+        "max_funding_rate_bps":     "75"
       }
     },
     "settlement": {
       "params": {
-        "authorized_matcher_address": "perpilize1matcher",
-        "maker_fee_rate": "0.0002",
-        "taker_fee_rate": "0.0005"
+        "authorized_matcher_address": "init1matcher000000000000000000000000000000",
+        "maker_fee_rate":             "0.000200000000000000",
+        "taker_fee_rate":             "0.000500000000000000",
+        "initial_margin_ratio":       "0.050000000000000000"
       }
     },
-    "oracle": {},
-    "position": {},
-    "liquidation": {}
+    "position": {
+      "params": {
+        "max_global_leverage": "20"
+      },
+      "positions": []
+    },
+    "oracle": {
+      "price_entries": []
+    },
+    "liquidation": {},
+    "bank": {
+      "params": {
+        "default_send_enabled": true
+      },
+      "balances": [
+        {
+          "address": "init1faucet000000000000000000000000000000",
+          "coins": [
+            { "denom": "uusdc", "amount": "10000000000000" },
+            { "denom": "uinit", "amount": "10000000000000" }
+          ]
+        }
+      ],
+      "supply": [
+        { "denom": "uusdc", "amount": "10000000000000" },
+        { "denom": "uinit", "amount": "10000000000000" }
+      ],
+      "denom_metadata": [
+        {
+          "description": "USDC stablecoin (6 decimals)",
+          "denom_units": [
+            { "denom": "uusdc", "exponent": 0, "aliases": [] },
+            { "denom": "USDC",  "exponent": 6, "aliases": [] }
+          ],
+          "base":    "uusdc",
+          "display": "USDC",
+          "name":    "USD Coin",
+          "symbol":  "USDC"
+        }
+      ]
+    }
   }
 }

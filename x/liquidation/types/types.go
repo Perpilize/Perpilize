@@ -3,6 +3,7 @@ package types
 import (
 	"errors"
 
+	"cosmossdk.io/math"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	positiontypes "github.com/perpilize/perpilize/x/position/types"
 )
@@ -11,7 +12,7 @@ import (
 
 type MarginKeeper interface {
 	IsLiquidatable(ctx sdk.Context, addr string) (bool, error)
-	ExecuteLiquidation(ctx sdk.Context, addr string, marketID string, partialRate sdk.Dec) error
+	ExecuteLiquidation(ctx sdk.Context, addr string, marketID string, partialRate math.LegacyDec) error
 }
 
 type PositionKeeper interface {
@@ -19,13 +20,11 @@ type PositionKeeper interface {
 }
 
 type OracleKeeper interface {
-	GetPrice(ctx sdk.Context, marketID string) (sdk.Dec, int64, error)
+	GetPrice(ctx sdk.Context, marketID string) (math.LegacyDec, int64, error)
 }
 
-// Event types
 const EventTypeLiquidation = "liquidation"
 
-// Errors
 var (
 	ErrAccountNotLiquidatable = errors.New("account health ratio is above 1, not liquidatable")
 	ErrPositionNotFound       = errors.New("no position found for target in specified market")

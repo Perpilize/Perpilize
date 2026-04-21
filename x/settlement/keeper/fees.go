@@ -1,18 +1,20 @@
 package keeper
 
 import (
-	"fmt"
+	"cosmossdk.io/math"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 )
 
-func (k Keeper) DeductFee(ctx sdk.Context, trader string, fee sdk.Dec) error {
-
-	bal := k.GetBalance(ctx, trader)
-
-	if bal.LT(fee) {
-		return fmt.Errorf("insufficient balance")
+// CollectFee deducts a fee from addr and credits it to the fee pool.
+func (k Keeper) CollectFee(ctx sdk.Context, addr string, feeAmount math.LegacyDec) error {
+	if err := k.SubBalance(ctx, addr, feeAmount); err != nil {
+		return err
 	}
-
-	k.SetBalance(ctx, trader, bal.Sub(fee))
+	k.AddBalance(ctx, "fee_pool", feeAmount)
 	return nil
+}
+
+// GetFeePool returns the accumulated fee pool balance.
+func (k Keeper) GetFeePool(ctx sdk.Context) math.LegacyDec {
+	return k.GetBalance(ctx, "fee_pool")
 }

@@ -1,23 +1,22 @@
 package keeper
 
 import (
-	"github.com/cosmos/cosmos-sdk/codec"
+	"cosmossdk.io/math"
 	storetypes "cosmossdk.io/store/types"
+	"github.com/cosmos/cosmos-sdk/codec"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
 	"github.com/perpilize/perpilize/x/margin/types"
 )
 
 type Keeper struct {
-	storeKey storetypes.StoreKey
-	cdc      codec.BinaryCodec
-
+	storeKey   storetypes.StoreKey
+	cdc        codec.BinaryCodec
 	oracle     types.OracleKeeper
 	funding    types.FundingKeeper
 	position   types.PositionKeeper
 	settlement types.SettlementKeeper
-
-	params types.Params
+	params     types.Params
 }
 
 func NewKeeper(
@@ -29,31 +28,25 @@ func NewKeeper(
 	settlement types.SettlementKeeper,
 ) Keeper {
 	return Keeper{
-		storeKey:   key,
-		cdc:        cdc,
-		oracle:     oracle,
-		funding:    funding,
-		position:   position,
-		settlement: settlement,
-		params:     types.DefaultParams(),
+		storeKey: key, cdc: cdc,
+		oracle: oracle, funding: funding,
+		position: position, settlement: settlement,
+		params: types.DefaultParams(),
 	}
 }
 
-// -------------------------
-// Account management
-// -------------------------
+// ── Account management ───────────────────────────────────────────────────────
 
 func (k Keeper) GetAccount(ctx sdk.Context, addr string) types.Account {
 	store := ctx.KVStore(k.storeKey)
-	key := []byte("account:" + addr)
-	bz := store.Get(key)
+	bz    := store.Get([]byte("account:" + addr))
 	if bz == nil {
 		return types.Account{
 			Address:       addr,
-			Collateral:    sdk.ZeroDec(),
-			UnrealizedPnL: sdk.ZeroDec(),
-			FundingPnL:    sdk.ZeroDec(),
-			MarginUsed:    sdk.ZeroDec(),
+			Collateral:    math.LegacyZeroDec(),
+			UnrealizedPnL: math.LegacyZeroDec(),
+			FundingPnL:    math.LegacyZeroDec(),
+			MarginUsed:    math.LegacyZeroDec(),
 		}
 	}
 	var acc types.Account
@@ -62,14 +55,16 @@ func (k Keeper) GetAccount(ctx sdk.Context, addr string) types.Account {
 }
 
 func (k Keeper) SetAccount(ctx sdk.Context, acc types.Account) {
-	store := ctx.KVStore(k.storeKey)
-	key := []byte("account:" + acc.Address)
-	bz := k.cdc.MustMarshal(&acc)
-	store.Set(key, bz)
+	store  := ctx.KVStore(k.storeKey)
+	bz    := k.cdc.MustMarshal(&acc)
+	store.Set([]byte("account:"+acc.Address), bz)
 }
 
-// Deposit adds collateral to an account.
-func (k Keeper) Deposit(ctx sdk.Context, addr string, amount sdk.Dec) error {
+func (k Keeper) GetParams() types.Params { return k.params }
+
+// ── Deposits / Withdrawals ───────────────────────────────────────────────────
+
+func (k Keeper) Deposit(ctx sdk.Context, addr string, amount math.LegacyDec) error {
 	if amount.IsNegative() || amount.IsZero() {
 		return types.ErrInvalidAmount
 	}
@@ -79,8 +74,7 @@ func (k Keeper) Deposit(ctx sdk.Context, addr string, amount sdk.Dec) error {
 	return nil
 }
 
-// Withdraw removes collateral, checking that remaining margin is sufficient.
-func (k Keeper) Withdraw(ctx sdk.Context, addr string, amount sdk.Dec) error {
+func (k Keeper) Withdraw(ctx sdk.Context, addr string, amount math.LegacyDec) error {
 	if amount.IsNegative() || amount.IsZero() {
 		return types.ErrInvalidAmount
 	}
@@ -91,111 +85,89 @@ func (k Keeper) Withdraw(ctx sdk.Context, addr string, amount sdk.Dec) error {
 	acc.Collateral = acc.Collateral.Sub(amount)
 	k.SetAccount(ctx, acc)
 
-	// Re-check health after withdrawal
 	ratio, err := k.HealthRatio(ctx, addr)
 	if err != nil {
 		return err
 	}
-	if ratio.LT(sdk.OneDec()) {
+	if ratio.LT(math.LegacyOneDec()) {
 		return types.ErrWithdrawalBreachesMargin
 	}
 	return nil
 }
 
-// -------------------------
-// Risk calculations
-// -------------------------
+// ── Risk calculations ────────────────────────────────────────────────────────
 
-// Equity = Collateral + UnrealizedPnL + FundingPnL
-func (k Keeper) Equity(ctx sdk.Context, addr string) (sdk.Dec, error) {
+func (k Keeper) Equity(ctx sdk.Context, addr string) (math.LegacyDec, error) {
 	acc := k.GetAccount(ctx, addr)
-
 	unrealizedPnL, err := k.computeUnrealizedPnL(ctx, addr)
 	if err != nil {
-		return sdk.ZeroDec(), err
+		return math.LegacyZeroDec(), err
 	}
-
 	fundingPnL, err := k.computeFundingPnL(ctx, addr)
 	if err != nil {
-		return sdk.ZeroDec(), err
+		return math.LegacyZeroDec(), err
 	}
-
-	equity := acc.Collateral.Add(unrealizedPnL).Add(fundingPnL)
-	return equity, nil
+	return acc.Collateral.Add(unrealizedPnL).Add(fundingPnL), nil
 }
 
-// MaintenanceMarginRequired = sum over positions of |size| * markPrice * MMR
-func (k Keeper) MaintenanceMarginRequired(ctx sdk.Context, addr string) (sdk.Dec, error) {
+func (k Keeper) MaintenanceMarginRequired(ctx sdk.Context, addr string) (math.LegacyDec, error) {
 	positions := k.position.GetPositions(ctx, addr)
-	mmr := k.params.MaintenanceMarginRatio
-	total := sdk.ZeroDec()
-
+	total     := math.LegacyZeroDec()
 	for _, pos := range positions {
 		markPrice, _, err := k.oracle.GetPrice(ctx, pos.MarketID)
 		if err != nil {
-			return sdk.ZeroDec(), err
+			return math.LegacyZeroDec(), err
 		}
 		notional := pos.Size.Abs().Mul(markPrice)
-		total = total.Add(notional.Mul(mmr))
+		total     = total.Add(notional.Mul(k.params.MaintenanceMarginRatio))
 	}
 	return total, nil
 }
 
-// InitialMarginRequired = sum over positions of |size| * markPrice * IMR
-func (k Keeper) InitialMarginRequired(ctx sdk.Context, addr string) (sdk.Dec, error) {
+func (k Keeper) InitialMarginRequired(ctx sdk.Context, addr string) (math.LegacyDec, error) {
 	positions := k.position.GetPositions(ctx, addr)
-	imr := k.params.InitialMarginRatio
-	total := sdk.ZeroDec()
-
+	total     := math.LegacyZeroDec()
 	for _, pos := range positions {
 		markPrice, _, err := k.oracle.GetPrice(ctx, pos.MarketID)
 		if err != nil {
-			return sdk.ZeroDec(), err
+			return math.LegacyZeroDec(), err
 		}
 		notional := pos.Size.Abs().Mul(markPrice)
-		total = total.Add(notional.Mul(imr))
+		total     = total.Add(notional.Mul(k.params.InitialMarginRatio))
 	}
 	return total, nil
 }
 
 // HealthRatio = Equity / MaintenanceMarginRequired
-// Returns sdk.MaxDec if MMR == 0 (no open positions).
-func (k Keeper) HealthRatio(ctx sdk.Context, addr string) (sdk.Dec, error) {
+func (k Keeper) HealthRatio(ctx sdk.Context, addr string) (math.LegacyDec, error) {
 	equity, err := k.Equity(ctx, addr)
 	if err != nil {
-		return sdk.ZeroDec(), err
+		return math.LegacyZeroDec(), err
 	}
-
 	mmr, err := k.MaintenanceMarginRequired(ctx, addr)
 	if err != nil {
-		return sdk.ZeroDec(), err
+		return math.LegacyZeroDec(), err
 	}
-
 	if mmr.IsZero() {
-		// No open positions — account is fully healthy
-		return sdk.NewDec(1_000_000), nil
+		return math.LegacyNewDec(1_000_000), nil
 	}
-
 	return equity.Quo(mmr), nil
 }
 
-// IsLiquidatable returns true when HealthRatio < 1.
 func (k Keeper) IsLiquidatable(ctx sdk.Context, addr string) (bool, error) {
 	ratio, err := k.HealthRatio(ctx, addr)
 	if err != nil {
 		return false, err
 	}
-	return ratio.LT(sdk.OneDec()), nil
+	return ratio.LT(math.LegacyOneDec()), nil
 }
 
-// -------------------------
-// EndBlock: scan all accounts
-// -------------------------
+// ── EndBlock scanner ─────────────────────────────────────────────────────────
 
 func (k Keeper) EndBlock(ctx sdk.Context) {
-	store := ctx.KVStore(k.storeKey)
+	store  := ctx.KVStore(k.storeKey)
 	prefix := []byte("account:")
-	iter := storetypes.KVStorePrefixIterator(store, prefix)
+	iter   := store.Iterator(prefix, append(prefix, 0xff))
 	defer iter.Close()
 
 	for ; iter.Valid(); iter.Next() {
@@ -207,7 +179,6 @@ func (k Keeper) EndBlock(ctx sdk.Context) {
 			ctx.Logger().Error("margin EndBlock: IsLiquidatable error", "addr", acc.Address, "err", err)
 			continue
 		}
-
 		if liquidatable {
 			if err := k.executeLiquidation(ctx, acc.Address); err != nil {
 				ctx.Logger().Error("margin EndBlock: liquidation error", "addr", acc.Address, "err", err)
@@ -216,67 +187,54 @@ func (k Keeper) EndBlock(ctx sdk.Context) {
 	}
 }
 
-// -------------------------
-// Internal helpers
-// -------------------------
+// ── Internal helpers ─────────────────────────────────────────────────────────
 
-func (k Keeper) computeUnrealizedPnL(ctx sdk.Context, addr string) (sdk.Dec, error) {
+func (k Keeper) computeUnrealizedPnL(ctx sdk.Context, addr string) (math.LegacyDec, error) {
 	positions := k.position.GetPositions(ctx, addr)
-	total := sdk.ZeroDec()
-
+	total     := math.LegacyZeroDec()
 	for _, pos := range positions {
 		markPrice, _, err := k.oracle.GetPrice(ctx, pos.MarketID)
 		if err != nil {
-			return sdk.ZeroDec(), err
+			return math.LegacyZeroDec(), err
 		}
-		// Long: (markPrice - entryPrice) * size
-		// Short: (entryPrice - markPrice) * |size|
-		pnl := markPrice.Sub(pos.EntryPrice).Mul(pos.Size)
-		total = total.Add(pnl)
+		// Long: (mark - entry) * size  |  Short: (entry - mark) * |size|
+		total = total.Add(markPrice.Sub(pos.AvgEntryPrice).Mul(pos.Size))
 	}
 	return total, nil
 }
 
-func (k Keeper) computeFundingPnL(ctx sdk.Context, addr string) (sdk.Dec, error) {
+func (k Keeper) computeFundingPnL(ctx sdk.Context, addr string) (math.LegacyDec, error) {
 	positions := k.position.GetPositions(ctx, addr)
-	total := sdk.ZeroDec()
-
+	total     := math.LegacyZeroDec()
 	for _, pos := range positions {
 		cum, err := k.funding.GetCumulativeFunding(ctx, pos.MarketID, addr)
 		if err != nil {
-			return sdk.ZeroDec(), err
+			return math.LegacyZeroDec(), err
 		}
-		// Funding debited for longs, credited for shorts
 		total = total.Sub(cum.Mul(pos.Size))
 	}
 	return total, nil
 }
 
 func (k Keeper) executeLiquidation(ctx sdk.Context, addr string) error {
-	positions := k.position.GetPositions(ctx, addr)
+	positions   := k.position.GetPositions(ctx, addr)
 	partialRate := k.params.PartialLiquidationRate
-	penalty := k.params.LiquidationPenaltyMin
-
-	acc := k.GetAccount(ctx, addr)
+	penalty     := k.params.LiquidationPenaltyMin
+	acc         := k.GetAccount(ctx, addr)
 
 	for _, pos := range positions {
 		markPrice, _, err := k.oracle.GetPrice(ctx, pos.MarketID)
 		if err != nil {
 			return err
 		}
-
-		// Reduce position by PartialLiquidationRate
-		reduceSize := pos.Size.Mul(partialRate)
-		notional := reduceSize.Abs().Mul(markPrice)
+		notional      := pos.Size.Abs().Mul(markPrice).Mul(partialRate)
 		penaltyAmount := notional.Mul(penalty)
 
-		// Deduct penalty from collateral
 		acc.Collateral = acc.Collateral.Sub(penaltyAmount)
 		if acc.Collateral.IsNegative() {
-			acc.Collateral = sdk.ZeroDec()
+			acc.Collateral = math.LegacyZeroDec()
 		}
 	}
-
 	k.SetAccount(ctx, acc)
 	return nil
 }

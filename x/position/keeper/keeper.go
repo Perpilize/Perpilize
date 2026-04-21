@@ -1,6 +1,8 @@
 package keeper
 
 import (
+	"cosmossdk.io/math"
+	storetypes "cosmossdk.io/store/types"
 	"github.com/cosmos/cosmos-sdk/codec"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
@@ -8,24 +10,21 @@ import (
 )
 
 type Keeper struct {
-	storeKey sdk.StoreKey
+	storeKey storetypes.StoreKey
 	cdc      codec.BinaryCodec
 }
 
-func NewKeeper(cdc codec.BinaryCodec, key sdk.StoreKey) Keeper {
-	return Keeper{
-		storeKey: key,
-		cdc:      cdc,
-	}
+func NewKeeper(cdc codec.BinaryCodec, key storetypes.StoreKey) Keeper {
+	return Keeper{storeKey: key, cdc: cdc}
 }
 
-// -------------------------
-// Position CRUD
-// -------------------------
+// ── Key helpers ──────────────────────────────────────────────────────────────
 
 func positionKey(addr, marketID string) []byte {
 	return []byte("pos:" + addr + ":" + marketID)
 }
+
+// ── CRUD ─────────────────────────────────────────────────────────────────────
 
 func (k Keeper) GetPosition(ctx sdk.Context, addr, marketID string) (types.Position, bool) {
 	store := ctx.KVStore(k.storeKey)
@@ -50,11 +49,10 @@ func (k Keeper) DeletePosition(ctx sdk.Context, addr, marketID string) {
 }
 
 // GetPositions returns all open positions for an address.
-// Implements margin/types.PositionKeeper interface.
 func (k Keeper) GetPositions(ctx sdk.Context, addr string) []types.Position {
-	store := ctx.KVStore(k.storeKey)
+	store  := ctx.KVStore(k.storeKey)
 	prefix := []byte("pos:" + addr + ":")
-	iter := sdk.KVStorePrefixIterator(store, prefix)
+	iter   := store.Iterator(prefix, append(prefix, 0xff))
 	defer iter.Close()
 
 	var positions []types.Position
@@ -66,20 +64,14 @@ func (k Keeper) GetPositions(ctx sdk.Context, addr string) []types.Position {
 	return positions
 }
 
-// -------------------------
-// Position mutations
-// -------------------------
+// ── Mutations ────────────────────────────────────────────────────────────────
 
 // OpenPosition opens or increases a position.
 // size > 0 = long, size < 0 = short.
 func (k Keeper) OpenPosition(
 	ctx sdk.Context,
-	addr string,
-	marketID string,
-	size sdk.Dec,
-	executionPrice sdk.Dec,
-	margin sdk.Dec,
-	cumulativeFunding sdk.Dec,
+	addr, marketID string,
+	size, executionPrice, margin, cumulativeFunding math.LegacyDec,
 ) error {
 	existing, found := k.GetPosition(ctx, addr, marketID)
 
@@ -95,42 +87,36 @@ func (k Keeper) OpenPosition(
 		return nil
 	}
 
-	// Increase position — compute new average entry price
 	totalSize := existing.Size.Add(size)
 	if totalSize.IsZero() {
-		// Perfectly opposing order — close entirely
 		k.DeletePosition(ctx, addr, marketID)
 		return nil
 	}
 
 	// Weighted average entry price
 	existingNotional := existing.Size.Mul(existing.AvgEntryPrice)
-	newNotional := size.Mul(executionPrice)
-	avgEntry := existingNotional.Add(newNotional).Quo(totalSize)
+	newNotional      := size.Mul(executionPrice)
+	avgEntry         := existingNotional.Add(newNotional).Quo(totalSize)
 
-	existing.Size = totalSize
-	existing.AvgEntryPrice = avgEntry
-	existing.Margin = existing.Margin.Add(margin)
+	existing.Size                  = totalSize
+	existing.AvgEntryPrice         = avgEntry
+	existing.Margin                = existing.Margin.Add(margin)
 	existing.LastCumulativeFunding = cumulativeFunding
 
 	k.SetPosition(ctx, existing)
 	return nil
 }
 
-// ReducePosition reduces an open position by reduceBy (absolute value).
-// Implements margin/types.PositionKeeper interface.
-func (k Keeper) ReducePosition(ctx sdk.Context, addr, marketID string, reduceBy sdk.Dec) error {
+// ReducePosition reduces an open position by reduceBy fraction (0-1).
+func (k Keeper) ReducePosition(ctx sdk.Context, addr, marketID string, reduceBy math.LegacyDec) error {
 	pos, found := k.GetPosition(ctx, addr, marketID)
 	if !found {
 		return types.ErrPositionNotFound
 	}
 
-	// reduceBy should be expressed as a fraction of current |size|
-	reduction := pos.Size.Mul(reduceBy)
-	pos.Size = pos.Size.Sub(reduction)
+	pos.Size = pos.Size.Mul(math.LegacyOneDec().Sub(reduceBy))
 
-	if pos.Size.Abs().LTE(sdk.NewDecWithPrec(1, 8)) {
-		// Dust — close entirely
+	if pos.Size.Abs().LTE(math.LegacyNewDecWithPrec(1, 8)) {
 		k.DeletePosition(ctx, addr, marketID)
 		return nil
 	}

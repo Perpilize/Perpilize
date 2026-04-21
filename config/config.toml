@@ -1,3 +1,75 @@
+# Perpilize config.toml (CometBFT v0.38)
+# Place at: ~/.perpilized/config/config.toml
+
+###############################################################################
+###                           Main                                          ###
+###############################################################################
+
 moniker = "perpilize-node"
-fast_sync = true
-timeout_commit = "1s"
+
+# NOTE: fast_sync was renamed to block_sync in CometBFT v0.38
+# fast_sync = true   ← this will cause a parse error, use below:
+block_sync = true
+
+###############################################################################
+###                           RPC                                           ###
+###############################################################################
+
+[rpc]
+laddr                        = "tcp://0.0.0.0:26657"
+cors_allowed_origins         = ["*"]
+max_open_connections         = 900
+max_subscription_clients     = 100
+max_subscriptions_per_client = 5
+timeout_broadcast_tx_commit  = "10s"
+
+###############################################################################
+###                           P2P                                           ###
+###############################################################################
+
+[p2p]
+laddr                  = "tcp://0.0.0.0:26656"
+external_address       = ""
+seeds                  = ""
+persistent_peers       = ""
+max_num_inbound_peers  = 40
+max_num_outbound_peers = 10
+
+###############################################################################
+###                           Consensus                                     ###
+###############################################################################
+
+[consensus]
+# 1s block time — matches whitepaper claim
+timeout_commit      = "1s"
+timeout_propose     = "3s"
+timeout_prevote     = "1s"
+timeout_precommit   = "1s"
+# Skip timeout_commit if all validators have committed (faster blocks)
+skip_timeout_commit = false
+
+###############################################################################
+###                           Mempool                                       ###
+###############################################################################
+
+[mempool]
+version    = "v1"
+recheck    = true
+broadcast  = true
+size       = 5000
+max_txs_bytes = 1073741824   # 1 GB
+
+###############################################################################
+###                           Storage                                       ###
+###############################################################################
+
+[storage]
+discard_abci_responses = false
+
+###############################################################################
+###                           Instrumentation                               ###
+###############################################################################
+
+[instrumentation]
+prometheus            = true
+prometheus_listen_addr = ":26660"

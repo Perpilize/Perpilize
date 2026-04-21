@@ -1,2 +1,65 @@
-minimum-gas-prices = "0.001uperp"
-pruning = "default"
+# Perpilize app.toml
+# Place at: ~/.perpilized/config/app.toml
+
+###############################################################################
+###                           Base Configuration                            ###
+###############################################################################
+
+# Minimum gas price — use uusdc since that's your collateral denom.
+# uperp doesn't exist yet; set it once you define a gas token.
+minimum-gas-prices = "0.001uusdc"
+
+# Pruning strategy
+pruning = "default"           # keep last 100 + every 10th state
+# pruning = "nothing"         # keep everything (useful for archive/indexer)
+# pruning = "everything"      # only keep last 2 states (smallest disk)
+
+pruning-keep-recent = "100"
+pruning-interval    = "10"
+
+# Halt on specific height (0 = never)
+halt-height = 0
+halt-time   = 0
+
+###############################################################################
+###                           API Server                                    ###
+###############################################################################
+
+[api]
+enable             = true
+swagger            = true
+address            = "tcp://0.0.0.0:1317"
+max-open-connections = 1000
+
+###############################################################################
+###                           gRPC                                          ###
+###############################################################################
+
+[grpc]
+enable  = true
+address = "0.0.0.0:9090"
+
+[grpc-web]
+enable = true
+
+###############################################################################
+###                           EVM (Initia minievm)                         ###
+###############################################################################
+
+[evm]
+# Enable the EVM RPC endpoint — required for precompile calls from the frontend
+enable         = true
+http-address   = "0.0.0.0:8545"
+ws-address     = "0.0.0.0:8546"
+# EVM chain ID — must match what MetaMask / ethers.js connects to
+# Initia testnet minitias use 5-digit IDs; devnet can use any value
+evm-chain-id   = 42101
+# Block gas limit
+block-gas-limit = 30000000
+
+###############################################################################
+###                           Mempool                                       ###
+###############################################################################
+
+[mempool]
+max-txs = 5000

@@ -3,10 +3,13 @@ package margin
 import (
 	"encoding/json"
 
+	abci      "github.com/cometbft/cometbft/abci/types"
+	"github.com/cosmos/cosmos-sdk/client"
 	"github.com/cosmos/cosmos-sdk/codec"
-	sdk "github.com/cosmos/cosmos-sdk/types"
+	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
+	sdk       "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/types/module"
-	abci "github.com/cometbft/cometbft/abci/types"
+	gwruntime "github.com/grpc-ecosystem/grpc-gateway/runtime"
 
 	"github.com/perpilize/perpilize/x/margin/keeper"
 	"github.com/perpilize/perpilize/x/margin/types"
@@ -23,31 +26,26 @@ func NewAppModule(cdc codec.Codec, k keeper.Keeper) AppModule {
 	return AppModule{cdc: cdc, keeper: k}
 }
 
-func (AppModule) Name() string                                    { return types.ModuleName }
-func (AppModule) RegisterInterfaces(_ interface{})                {}
+func (AppModule) Name() string                                { return types.ModuleName }
+func (AppModule) IsAppModule()                                {}
+func (AppModule) IsOnePerModuleType()                         {}
+func (AppModule) RegisterInterfaces(_ codectypes.InterfaceRegistry) {}
+func (AppModule) RegisterLegacyAminoCodec(_ *codec.LegacyAmino) {}
 func (AppModule) DefaultGenesis(_ codec.JSONCodec) json.RawMessage { return []byte("{}") }
-func (AppModule) ValidateGenesis(_ codec.JSONCodec, _ interface{}, _ json.RawMessage) error {
+func (AppModule) ValidateGenesis(_ codec.JSONCodec, _ client.TxEncodingConfig, _ json.RawMessage) error {
 	return nil
 }
-func (AppModule) RegisterRESTRoutes(_ interface{}, _ interface{}) {}
-func (AppModule) RegisterGRPCGatewayRoutes(_ interface{}, _ interface{}) {}
-func (AppModule) GetTxCmd() interface{}                           { return nil }
-func (AppModule) GetQueryCmd() interface{}                        { return nil }
-func (AppModule) RegisterLegacyAminoCodec(_ *codec.LegacyAmino)  {}
+func (AppModule) RegisterGRPCGatewayRoutes(_ client.Context, _ *gwruntime.ServeMux) {}
 
-func (m AppModule) InitGenesis(ctx sdk.Context, _ codec.JSONCodec, _ json.RawMessage) []abci.ValidatorUpdate {
+func (m AppModule) InitGenesis(_ sdk.Context, _ codec.JSONCodec, _ json.RawMessage) []abci.ValidatorUpdate {
 	return nil
 }
-
-func (m AppModule) ExportGenesis(ctx sdk.Context, cdc codec.JSONCodec) json.RawMessage {
+func (m AppModule) ExportGenesis(_ sdk.Context, _ codec.JSONCodec) json.RawMessage {
 	return []byte("{}")
 }
-
-func (m AppModule) BeginBlock(_ sdk.Context, _ abci.RequestBeginBlock) {}
-
-func (m AppModule) EndBlock(ctx sdk.Context, _ abci.RequestEndBlock) []abci.ValidatorUpdate {
+func (m AppModule) BeginBlock(_ sdk.Context)                    {}
+func (m AppModule) EndBlock(ctx sdk.Context) []abci.ValidatorUpdate {
 	m.keeper.EndBlock(ctx)
 	return nil
 }
-
 func (m AppModule) ConsensusVersion() uint64 { return 1 }

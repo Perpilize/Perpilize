@@ -1,6 +1,7 @@
 package margin
 
 import (
+	"cosmossdk.io/math"
 	"context"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
@@ -18,7 +19,7 @@ func NewMsgServerImpl(k keeper.Keeper) types.MsgServer {
 
 func (s *msgServer) Deposit(goCtx context.Context, msg *types.MsgDeposit) (*types.MsgDepositResponse, error) {
 	ctx := sdk.UnwrapSDKContext(goCtx)
-	amount, err := sdk.NewDecFromStr(msg.Amount)
+	amount, err := math.LegacyNewDecFromStr(msg.Amount)
 	if err != nil {
 		return nil, err
 	}
@@ -30,7 +31,7 @@ func (s *msgServer) Deposit(goCtx context.Context, msg *types.MsgDeposit) (*type
 
 func (s *msgServer) Withdraw(goCtx context.Context, msg *types.MsgWithdraw) (*types.MsgWithdrawResponse, error) {
 	ctx := sdk.UnwrapSDKContext(goCtx)
-	amount, err := sdk.NewDecFromStr(msg.Amount)
+	amount, err := math.LegacyNewDecFromStr(msg.Amount)
 	if err != nil {
 		return nil, err
 	}

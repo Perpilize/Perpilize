@@ -1,23 +1,32 @@
 package keeper
 
 import (
-	"fmt"
+	"cosmossdk.io/math"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 )
 
-func (k Keeper) AddCollateral(ctx sdk.Context, addr string, amt sdk.Dec) {
-	bal := k.GetBalance(ctx, addr)
-	k.SetBalance(ctx, addr, bal.Add(amt))
+// GetCollateral returns the collateral stored for an address.
+func (k Keeper) GetCollateral(ctx sdk.Context, addr string) math.LegacyDec {
+	store := ctx.KVStore(k.storeKey)
+	bz    := store.Get([]byte("col:" + addr))
+	if bz == nil {
+		return math.LegacyZeroDec()
+	}
+	var dec math.LegacyDec
+	if err := dec.Unmarshal(bz); err != nil {
+		return math.LegacyZeroDec()
+	}
+	return dec
 }
 
-func (k Keeper) RemoveCollateral(ctx sdk.Context, addr string, amt sdk.Dec) error {
+// SetCollateral stores the collateral for an address.
+func (k Keeper) SetCollateral(ctx sdk.Context, addr string, amount math.LegacyDec) {
+	store  := ctx.KVStore(k.storeKey)
+	bz, _ := amount.Marshal()
+	store.Set([]byte("col:"+addr), bz)
+}
 
-	bal := k.GetBalance(ctx, addr)
-
-	if bal.LT(amt) {
-		return fmt.Errorf("insufficient collateral")
-	}
-
-	k.SetBalance(ctx, addr, bal.Sub(amt))
-	return nil
+// AddCollateral increases stored collateral for an address.
+func (k Keeper) AddCollateral(ctx sdk.Context, addr string, amount math.LegacyDec) {
+	k.SetCollateral(ctx, addr, k.GetCollateral(ctx, addr).Add(amount))
 }

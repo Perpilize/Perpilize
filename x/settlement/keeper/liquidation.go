@@ -1,26 +1,31 @@
 package keeper
 
-import sdk "github.com/cosmos/cosmos-sdk/types"
+import (
+	"cosmossdk.io/math"
+	sdk "github.com/cosmos/cosmos-sdk/types"
+)
 
-func (k Keeper) ApplyLiquidation(
+// ProcessLiquidationPenalty moves the penalty amount from the liquidated account
+// to the insurance fund, and rewards the liquidator.
+func (k Keeper) ProcessLiquidationPenalty(
 	ctx sdk.Context,
-	trader string,
-	penalty sdk.Dec,
-	insurance string,
-) {
+	liquidated string,
+	liquidator string,
+	penalty math.LegacyDec,
+) error {
+	// Half penalty to liquidator, half to insurance fund
+	liquidatorReward := penalty.Quo(math.LegacyNewDec(2))
+	insuranceAmount  := penalty.Sub(liquidatorReward)
 
-	bal := k.GetBalance(ctx, trader)
-
-	newBal := bal.Sub(penalty)
-
-	if newBal.IsNegative() {
-		deficit := newBal.Abs()
-
-		insBal := k.GetBalance(ctx, insurance)
-		k.SetBalance(ctx, insurance, insBal.Sub(deficit))
-
-		newBal = sdk.ZeroDec()
+	if err := k.SubBalance(ctx, liquidated, penalty); err != nil {
+		return err
 	}
+	k.AddBalance(ctx, liquidator,        liquidatorReward)
+	k.AddBalance(ctx, "insurance_fund",  insuranceAmount)
+	return nil
+}
 
-	k.SetBalance(ctx, trader, newBal)
+// GetInsuranceFund returns the current insurance fund balance.
+func (k Keeper) GetInsuranceFund(ctx sdk.Context) math.LegacyDec {
+	return k.GetBalance(ctx, "insurance_fund")
 }

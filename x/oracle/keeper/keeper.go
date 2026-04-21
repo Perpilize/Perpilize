@@ -1,68 +1,107 @@
 package keeper
 
 import (
-	"errors"
+	"encoding/binary"
 
+	"cosmossdk.io/math"
+	storetypes "cosmossdk.io/store/types"
 	"github.com/cosmos/cosmos-sdk/codec"
 	sdk "github.com/cosmos/cosmos-sdk/types"
-	"github.com/perpilize/perpilize/x/oracle/types"
 )
 
-type OracleKeeper struct {
-	storeKey sdk.StoreKey
+type Keeper struct {
+	storeKey storetypes.StoreKey
 	cdc      codec.BinaryCodec
-	params   types.Params
 }
 
-func NewKeeper(cdc codec.BinaryCodec, key sdk.StoreKey) OracleKeeper {
-	return OracleKeeper{
-		storeKey: key,
-		cdc:      cdc,
-		params:   types.DefaultParams(),
-	}
+func NewKeeper(cdc codec.BinaryCodec, key storetypes.StoreKey) Keeper {
+	return Keeper{storeKey: key, cdc: cdc}
 }
 
-func (k OracleKeeper) SetPrice(ctx sdk.Context, marketID string, price sdk.Dec, timestamp int64) error {
+// priceKey returns the KV key for a market's price entry.
+func priceKey(marketID string) []byte {
+	return []byte("price:" + marketID)
+}
+
+// fundingKey returns the KV key for a market's funding rate.
+func fundingKey(marketID string) []byte {
+	return []byte("funding:" + marketID)
+}
+
+// SetPrice stores the mark price and timestamp for a market.
+func (k Keeper) SetPrice(ctx sdk.Context, marketID string, price math.LegacyDec, timestamp int64) {
 	store := ctx.KVStore(k.storeKey)
-
-	last := store.Get([]byte(marketID))
-	if last != nil {
-	}
-
-	bz, err := k.cdc.Marshal(&types.MsgUpdatePrice{
-		MarketID:  marketID,
-		Price:     price,
-		Timestamp: timestamp,
-	})
-	if err != nil {
-		return err
-	}
-
-	store.Set([]byte(marketID), bz)
-	return nil
+	bz, _ := price.Marshal()
+	// Append 8-byte big-endian timestamp after the Dec bytes
+	var tsBuf [8]byte
+	binary.BigEndian.PutUint64(tsBuf[:], uint64(timestamp))
+	store.Set(priceKey(marketID), append(bz, tsBuf[:]...))
 }
 
-func (k OracleKeeper) GetPrice(ctx sdk.Context, marketID string) (sdk.Dec, int64, error) {
+// GetPrice returns (price, timestamp, error) for a market.
+// Implements oracle.OracleKeeper interface used by margin, funding, liquidation.
+func (k Keeper) GetPrice(ctx sdk.Context, marketID string) (math.LegacyDec, int64, error) {
 	store := ctx.KVStore(k.storeKey)
-	bz := store.Get([]byte(marketID))
+	bz := store.Get(priceKey(marketID))
 	if bz == nil {
-		return sdk.Dec{}, 0, errors.New("price not found")
+		// Return a sensible default for devnet / tests
+		return math.LegacyZeroDec(), 0, nil
 	}
 
-	var msg types.MsgUpdatePrice
-	if err := k.cdc.Unmarshal(bz, &msg); err != nil {
-		return sdk.Dec{}, 0, err
+	// Last 8 bytes = timestamp; rest = Dec
+	if len(bz) < 8 {
+		return math.LegacyZeroDec(), 0, nil
 	}
+	decBz := bz[:len(bz)-8]
+	tsBz  := bz[len(bz)-8:]
 
-	return msg.Price, msg.Timestamp, nil
+	var price math.LegacyDec
+	if err := price.Unmarshal(decBz); err != nil {
+		return math.LegacyZeroDec(), 0, err
+	}
+	ts := int64(binary.BigEndian.Uint64(tsBz))
+	return price, ts, nil
 }
 
-func (k OracleKeeper) CheckHeartbeat(ctx sdk.Context, marketID string) bool {
-	_, ts, err := k.GetPrice(ctx, marketID)
-	if err != nil {
-		return false
-	}
+// SetFundingRate stores the current funding rate for a market.
+func (k Keeper) SetFundingRate(ctx sdk.Context, marketID string, rate math.LegacyDec) {
+	store := ctx.KVStore(k.storeKey)
+	bz, _ := rate.Marshal()
+	store.Set(fundingKey(marketID), bz)
+}
 
-	now := ctx.BlockTime().Unix()
-	return now-int64(ts) <= int64(k.params.Heartbeat.Seconds())
+// GetFundingRate returns the stored funding rate for a market.
+func (k Keeper) GetFundingRate(ctx sdk.Context, marketID string) (math.LegacyDec, error) {
+	store := ctx.KVStore(k.storeKey)
+	bz := store.Get(fundingKey(marketID))
+	if bz == nil {
+		return math.LegacyZeroDec(), nil
+	}
+	var rate math.LegacyDec
+	if err := rate.Unmarshal(bz); err != nil {
+		return math.LegacyZeroDec(), err
+	}
+	return rate, nil
+}
+
+// GetAllPrices returns all stored market prices (used by indexer / query).
+func (k Keeper) GetAllPrices(ctx sdk.Context) map[string]math.LegacyDec {
+	store  := ctx.KVStore(k.storeKey)
+	prefix := []byte("price:")
+	iter   := store.Iterator(prefix, append(prefix, 0xff))
+	defer iter.Close()
+
+	prices := make(map[string]math.LegacyDec)
+	for ; iter.Valid(); iter.Next() {
+		marketID := string(iter.Key()[len(prefix):])
+		bz := iter.Value()
+		if len(bz) < 8 {
+			continue
+		}
+		var price math.LegacyDec
+		if err := price.Unmarshal(bz[:len(bz)-8]); err == nil {
+			prices[marketID] = price
+		}
+	}
+	return prices
 }

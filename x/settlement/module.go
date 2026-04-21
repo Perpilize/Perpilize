@@ -3,12 +3,18 @@ package settlement
 import (
 	"encoding/json"
 
-	sdk "github.com/cosmos/cosmos-sdk/types"
+	abci    "github.com/cometbft/cometbft/abci/types"
+	"github.com/cosmos/cosmos-sdk/client"
+	"github.com/cosmos/cosmos-sdk/codec"
+	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
+	sdk     "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/types/module"
+	gwruntime "github.com/grpc-ecosystem/grpc-gateway/runtime"
 
 	"github.com/perpilize/perpilize/x/settlement/keeper"
-	"github.com/perpilize/perpilize/x/settlement/types"
 )
+
+var _ module.AppModule = AppModule{}
 
 type AppModule struct {
 	cdc    codec.Codec
@@ -19,24 +25,23 @@ func NewAppModule(cdc codec.Codec, k keeper.Keeper) AppModule {
 	return AppModule{cdc: cdc, keeper: k}
 }
 
-func (am AppModule) Name() string { return types.ModuleName }
-
-func (am AppModule) RegisterServices(cfg module.Configurator) {
-	types.RegisterMsgServer(cfg.MsgServer(), keeper.NewMsgServerImpl(am.keeper))
-	types.RegisterQueryServer(cfg.QueryServer(), keeper.NewQueryServerImpl(am.keeper))
+func (AppModule) Name() string                                { return "settlement" }
+func (AppModule) IsAppModule()                                {}
+func (AppModule) IsOnePerModuleType()                         {}
+func (AppModule) RegisterInterfaces(_ codectypes.InterfaceRegistry) {}
+func (AppModule) RegisterLegacyAminoCodec(_ *codec.LegacyAmino) {}
+func (AppModule) DefaultGenesis(_ codec.JSONCodec) json.RawMessage { return []byte("{}") }
+func (AppModule) ValidateGenesis(_ codec.JSONCodec, _ client.TxEncodingConfig, _ json.RawMessage) error {
+	return nil
 }
+func (AppModule) RegisterGRPCGatewayRoutes(_ client.Context, _ *gwruntime.ServeMux) {}
 
-func (am AppModule) InitGenesis(ctx sdk.Context, cdc codec.JSONCodec, data json.RawMessage) {
-	var state types.GenesisState
-	cdc.MustUnmarshalJSON(data, &state)
-	am.keeper.SetParams(ctx, state.Params)
+func (m AppModule) InitGenesis(_ sdk.Context, _ codec.JSONCodec, _ json.RawMessage) []abci.ValidatorUpdate {
+	return nil
 }
-
-func (am AppModule) ExportGenesis(ctx sdk.Context, cdc codec.JSONCodec) json.RawMessage {
-	state := types.GenesisState{
-		Params: am.keeper.GetParams(ctx),
-	}
-	return cdc.MustMarshalJSON(&state)
+func (m AppModule) ExportGenesis(_ sdk.Context, _ codec.JSONCodec) json.RawMessage {
+	return []byte("{}")
 }
-
-func (am AppModule) ConsensusVersion() uint64 { return 1 }
+func (m AppModule) BeginBlock(_ sdk.Context)                    {}
+func (m AppModule) EndBlock(_ sdk.Context) []abci.ValidatorUpdate { return nil }
+func (m AppModule) ConsensusVersion() uint64                    { return 1 }
