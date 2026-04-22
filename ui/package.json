@@ -12,7 +12,8 @@
   "dependencies": {
     "@emotion/react": "11.14.0",
     "@emotion/styled": "11.14.1",
-    "@initia/interwovenkit-react": "^2.6.0",
+    "@initia/initia-registry-types": "^1.0.13",
+    "@initia/react-wallet-widget": "^1.9.8",
     "@mui/icons-material": "7.3.5",
     "@mui/material": "7.3.5",
     "@popperjs/core": "2.11.8",

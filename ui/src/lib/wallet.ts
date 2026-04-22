@@ -1,21 +1,28 @@
-import { useWallet } from "@initia/interwovenkit-react";
+import { useAddress, useWallet } from "@initia/react-wallet-widget";
 
 /**
- * usePerpilizeWallet wraps InterwovenKit's useWallet hook with
- * Perpilize-specific defaults. Use this everywhere in the app
- * instead of calling useWallet() directly.
+ * usePerpilizeWallet wraps Initia's react-wallet-widget hooks.
+ *
+ * Install:
+ *   npm install @initia/react-wallet-widget
+ *
+ * Wrap your app root in provider.tsx:
+ *   <WalletWidgetProvider customLayer={...}>
+ *     <App />
+ *   </WalletWidgetProvider>
  */
 export function usePerpilizeWallet() {
-  const wallet = useWallet();
+  const address                      = useAddress();
+  const { onboard, view, requestTx } = useWallet();
 
   return {
-    address:    wallet.account?.address ?? null,
-    connected:  wallet.connected,
-    connect:    wallet.connect,
-    disconnect: wallet.disconnect,
-    // Formatted short address for display e.g. "init1abc...xyz"
-    shortAddress: wallet.account?.address
-      ? `${wallet.account.address.slice(0, 10)}...${wallet.account.address.slice(-6)}`
+    address,
+    connected:    !!address,
+    connect:      onboard,
+    viewWallet:   view,
+    requestTx,
+    shortAddress: address
+      ? `${address.slice(0, 10)}...${address.slice(-6)}`
       : null,
   };
 }
