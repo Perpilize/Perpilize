@@ -145,6 +145,7 @@ export function useOrders(selectedMarket: Market): UseOrdersReturn {
 
   const cancelOrder = useCallback(async (market: string, index: number) => {
     setLoading(true);
+    console.log(market);
     await new Promise((r) => setTimeout(r, 400));
     setOpenOrders((prev) => prev.filter((_, i) => i !== index));
     setLoading(false);
