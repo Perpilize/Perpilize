@@ -10,6 +10,7 @@ import { cn }                 from "../lib/utils";
 import { useChain }           from "../hooks";
 import { usePerpilizeWallet } from "../lib/wallet";
 import { formatUSD } from "../lib/utils";
+import Logoimg from "../assets/Perpilelogo.png";
 
 type View = "trading" | "portfolio" | "subaccounts" | "funding" | "activity" | "settings" | "admin" | "risk";
 
@@ -59,8 +60,8 @@ export function ExchangeApp({ onBackToLanding }: { onBackToLanding: () => void }
         <div className="flex h-16 items-center justify-between border-b border-sidebar-border px-4">
           {!sidebarCollapsed && (
             <div className="flex items-center gap-2">
-              <div className="flex h-8 w-8 items-center justify-center rounded bg-gradient-to-br from-ultramarine-500 to-ultramarine-700">
-                <Network className="h-5 w-5 text-white" />
+              <div className="flex h-8 w-9 items-center justify-center">
+                <img src={Logoimg} alt="Perpilize Logo" />
               </div>
               <span className="font-semibold text-sidebar-foreground">Perpilize</span>
             </div>
