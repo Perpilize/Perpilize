@@ -25,7 +25,7 @@ interface UseMarketsReturn {
 export function useMarkets(): UseMarketsReturn {
   const [markets, setMarkets] = useState<Market[]>(MOCK_MARKETS);
   const [selectedSymbol, setSelectedSymbol] = useState<string>(MOCK_MARKETS[0].symbol);
-  const [loading, setLoading] = useState(false);
+  const [loading] = useState(false);
 
   // Simulate live price ticks
   useEffect(() => {
@@ -105,8 +105,8 @@ export function useOrders(selectedMarket: Market): UseOrdersReturn {
   const [lastError, setLastError] = useState<string | null>(null);
 
   // Live order entry estimates (updated when market price changes)
-  const [size, setSize] = useState(1);
-  const [leverage, setLeverage] = useState(10);
+  const [size] = useState(1);
+  const [leverage] = useState(10);
 
   const imr = 0.05;
   const takerFeeRate = 0.0005;
@@ -175,7 +175,7 @@ export function usePortfolio(): UsePortfolioReturn {
   const [exposures] = useState<ExposureEntry[]>(MOCK_EXPOSURE_DATA);
 
   const totalValue = assets.reduce((s, a) => s + a.value, 0);
-  const totalAdjValue = assets.reduce((s, a) => s + a.value * a.haircut, 0);
+  // const totalAdjValue = assets.reduce((s, a) => s + a.value * a.haircut, 0);
   const imr = 0.1;
   const mmr = 0.05;
 
