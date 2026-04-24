@@ -127,11 +127,6 @@ export const MOCK_CHAIN_STATUS: ChainStatus = {
   finality: "2.1s avg",
 };
 
-export const MOCK_WALLET: WalletState = {
-  address: "init1perp1ize000000000000000000000000000000",
-  connected: true,
-  accountEquity: 2_847_392.18,
-};
 
 // ─── Chart generators ──────────────────────────────────────────────────────
 
@@ -142,6 +137,12 @@ export function generatePriceData(points = 100, base = 42000, variance = 2000): 
     volume: Math.random() * 1_000_000,
   }));
 }
+
+export const MOCK_WALLET: WalletState = {
+  address: null,       
+  connected: false,    
+  accountEquity: 0,    
+};
 
 export function generateVarHistory(days = 30): VarPoint[] {
   return Array.from({ length: days }, (_, i) => ({
