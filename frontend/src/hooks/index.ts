@@ -8,12 +8,17 @@ import {
   MOCK_MARKETS, MOCK_POSITIONS, MOCK_OPEN_ORDERS,
   MOCK_PORTFOLIO_ASSETS, MOCK_EXPOSURE_DATA,
   MOCK_RISK_METRICS, MOCK_POSITION_RISK, MOCK_ORACLE_SOURCES,
-  MOCK_SUBACCOUNTS, MOCK_CHAIN_STATUS, MOCK_WALLET,
+  MOCK_SUBACCOUNTS, MOCK_CHAIN_STATUS,
   generatePriceData,
 } from "../utils/mockData";
 import { calcPnL, calcPnLPercent } from "../lib/utils";
+import { usePerpilizeWallet } from "../lib/wallet";
+import { openPosition, getEvmSigner } from "../lib/contracts";
+import { restUrl } from "../lib/rpc";
+import { ethers } from "ethers";
 
-// ─── useMarkets ────────────────────────────────────────────────────────────
+
+const DEMO_MODE = true;
 
 interface UseMarketsReturn {
   markets: Market[];
@@ -27,7 +32,6 @@ export function useMarkets(): UseMarketsReturn {
   const [selectedSymbol, setSelectedSymbol] = useState<string>(MOCK_MARKETS[0].symbol);
   const [loading] = useState(false);
 
-  // Simulate live price ticks
   useEffect(() => {
     const interval = setInterval(() => {
       setMarkets((prev) =>
@@ -42,10 +46,7 @@ export function useMarkets(): UseMarketsReturn {
   }, []);
 
   const selectedMarket = markets.find((m) => m.symbol === selectedSymbol) ?? markets[0];
-
-  const selectMarket = useCallback((symbol: string) => {
-    setSelectedSymbol(symbol);
-  }, []);
+  const selectMarket = useCallback((symbol: string) => setSelectedSymbol(symbol), []);
 
   return { markets, selectedMarket, selectMarket, loading };
 }
@@ -64,7 +65,6 @@ export function usePositions(currentPrices: Record<string, number> = {}): UsePos
   const [positions, setPositions] = useState<Position[]>(MOCK_POSITIONS);
   const [loading, setLoading] = useState(false);
 
-  // Update PnL whenever prices change
   const updatedPositions = positions.map((pos) => {
     const current = currentPrices[pos.market] ?? pos.current;
     const pnl = calcPnL(pos.size, pos.entry, current);
@@ -77,7 +77,6 @@ export function usePositions(currentPrices: Record<string, number> = {}): UsePos
 
   const closePosition = useCallback(async (market: string) => {
     setLoading(true);
-    // Simulate tx delay
     await new Promise((r) => setTimeout(r, 800));
     setPositions((prev) => prev.filter((p) => p.market !== market));
     setLoading(false);
@@ -103,25 +102,40 @@ export function useOrders(selectedMarket: Market): UseOrdersReturn {
   const [openOrders, setOpenOrders] = useState<Order[]>(MOCK_OPEN_ORDERS);
   const [loading, setLoading] = useState(false);
   const [lastError, setLastError] = useState<string | null>(null);
-
-  // Live order entry estimates (updated when market price changes)
-  const [size] = useState(1);
-  const [leverage] = useState(10);
+  const { connected, connect, requestTx, address } = usePerpilizeWallet();
 
   const imr = 0.05;
   const takerFeeRate = 0.0005;
+  const size = 1;
+  const leverage = 10;
 
   const estimatedMargin = Math.abs(size) * selectedMarket.price * imr;
   const estimatedFee = Math.abs(size) * selectedMarket.price * takerFeeRate;
-  const liquidationPrice =
-    selectedMarket.price * (1 - 1 / leverage + 0.03); // long approximation
+  const liquidationPrice = selectedMarket.price * (1 - 1 / leverage + 0.03);
 
   const submitOrder = useCallback(
-    async (req: OrderRequest) => {
-      setLoading(true);
-      setLastError(null);
+  async (req: OrderRequest) => {
+    setLastError(null);
+
+    if (!connected || !address) {
       try {
-        await new Promise((r) => setTimeout(r, 600));
+        await connect();
+      } catch {
+        setLastError("Please connect your wallet to trade.");
+        return;
+      }
+      return;
+    }
+
+    setLoading(true);
+
+    if (DEMO_MODE) {
+      await new Promise((r) => setTimeout(r, 1200));
+      const fakeTxHash = "0x" + Math.random().toString(16).slice(2).padEnd(64, "0");
+      console.log(`[DEMO] Order submitted — tx: ${fakeTxHash}`);
+      console.log(`[DEMO] ${req.side.toUpperCase()} ${req.size} ${req.market} @ ${req.price ?? "market"} x${req.leverage}`);
+
+      if (req.type !== "market") {
         const newOrder: Order = {
           market: req.market,
           type: req.type.charAt(0).toUpperCase() + req.type.slice(1),
@@ -129,37 +143,86 @@ export function useOrders(selectedMarket: Market): UseOrdersReturn {
           size: req.size,
           price: req.price ?? selectedMarket.price,
           filled: 0,
-          status: req.type === "market" ? "Filled" : "Open",
+          status: "Open",
         };
-        if (req.type !== "market") {
-          setOpenOrders((prev) => [newOrder, ...prev]);
-        }
-      } catch (e) {
-        setLastError("Order submission failed. Please try again.");
-      } finally {
-        setLoading(false);
+        setOpenOrders((prev) => [newOrder, ...prev]);
+      } else {
+        // Market order: add as filled position immediately
+        const newOrder: Order = {
+          market: req.market,
+          type: "Market",
+          side: req.side === "long" ? "Long" : "Short",
+          size: req.size,
+          price: selectedMarket.price,
+          filled: 100,
+          status: "Filled",
+        };
+        setOpenOrders((prev) => [newOrder, ...prev]);
       }
-    },
-    [selectedMarket]
-  );
 
-  const cancelOrder = useCallback(async (market: string, index: number) => {
+      setLoading(false);
+      return;
+    }
+
+    // Real tx path (used when DEMO_MODE = false)
+    try {
+      const signer = await getEvmSigner();
+      const sizeScaled = BigInt(
+        Math.round(req.size * (req.side === "long" ? 1 : -1) * 1e18)
+      );
+      const priceScaled = ethers.parseEther(String(req.price ?? selectedMarket.price));
+      await openPosition(signer, req.market, sizeScaled, priceScaled);
+
+      if (req.type !== "market") {
+        const newOrder: Order = {
+          market: req.market,
+          type: req.type.charAt(0).toUpperCase() + req.type.slice(1),
+          side: req.side === "long" ? "Long" : "Short",
+          size: req.size,
+          price: req.price ?? selectedMarket.price,
+          filled: 0,
+          status: "Open",
+        };
+        setOpenOrders((prev) => [newOrder, ...prev]);
+      }
+    } catch {
+      try {
+        await requestTx({
+          messages: [
+            {
+              typeUrl: "/perpilize.settlement.MsgExecuteTrade",
+              value: {
+                sender: address,
+                market: req.market,
+                side: req.side,
+                size: String(req.size),
+                price: String(req.price ?? selectedMarket.price),
+                leverage: String(req.leverage),
+              },
+            },
+          ],
+        });
+      } catch (txErr: any) {
+        setLastError(txErr?.message ?? "Order submission failed. Please try again.");
+      }
+    } finally {
+      setLoading(false);
+    }
+  },
+  [selectedMarket, connected, connect, requestTx, address]
+);
+
+  const cancelOrder = useCallback(async (_market: string, index: number) => {
     setLoading(true);
-    console.log(market);
     await new Promise((r) => setTimeout(r, 400));
     setOpenOrders((prev) => prev.filter((_, i) => i !== index));
     setLoading(false);
   }, []);
 
   return {
-    openOrders,
-    submitOrder,
-    cancelOrder,
-    loading,
-    lastError,
-    estimatedMargin,
-    estimatedFee,
-    liquidationPrice,
+    openOrders, submitOrder, cancelOrder,
+    loading, lastError,
+    estimatedMargin, estimatedFee, liquidationPrice,
   };
 }
 
@@ -176,7 +239,6 @@ export function usePortfolio(): UsePortfolioReturn {
   const [exposures] = useState<ExposureEntry[]>(MOCK_EXPOSURE_DATA);
 
   const totalValue = assets.reduce((s, a) => s + a.value, 0);
-  // const totalAdjValue = assets.reduce((s, a) => s + a.value * a.haircut, 0);
   const imr = 0.1;
   const mmr = 0.05;
 
@@ -202,10 +264,7 @@ interface UseRiskReturn {
 }
 
 export function useRisk(): UseRiskReturn {
-  return {
-    metrics: MOCK_RISK_METRICS,
-    positionRisk: MOCK_POSITION_RISK,
-  };
+  return { metrics: MOCK_RISK_METRICS, positionRisk: MOCK_POSITION_RISK };
 }
 
 // ─── useOracle ─────────────────────────────────────────────────────────────
@@ -247,9 +306,10 @@ interface UseChainReturn {
 
 export function useChain(): UseChainReturn {
   const [chain, setChain] = useState<ChainStatus>(MOCK_CHAIN_STATUS);
-  const [wallet, setWallet] = useState<WalletState>(MOCK_WALLET);
+  const [accountEquity, setAccountEquity] = useState(0);
+  const { address, connected, connect: walletConnect, viewWallet } = usePerpilizeWallet();
 
-  // Simulate block increments
+  // Block ticker
   useEffect(() => {
     const interval = setInterval(() => {
       setChain((prev) => ({ ...prev, blockHeight: prev.blockHeight + 1 }));
@@ -257,14 +317,43 @@ export function useChain(): UseChainReturn {
     return () => clearInterval(interval);
   }, []);
 
+  // Fetch real USDC balance from testnet REST
+  useEffect(() => {
+    if (!address) { setAccountEquity(0); return; }
+
+    async function fetchBalance() {
+      try {
+        const res = await fetch(
+          `${restUrl}/cosmos/bank/v1beta1/balances/${address}`
+        );
+        const data = await res.json();
+        const balances: { denom: string; amount: string }[] = data.balances ?? [];
+        const usdc = balances.find((b) => b.denom === "uusdc");
+        // uusdc has 6 decimals
+        setAccountEquity(usdc ? Number(usdc.amount) / 1_000_000 : 0);
+      } catch {
+        setAccountEquity(0);
+      }
+    }
+
+    fetchBalance();
+    const interval = setInterval(fetchBalance, 10_000); // refresh every 10s
+    return () => clearInterval(interval);
+  }, [address]);
+
+  const wallet: WalletState = {
+    address: address ?? null,
+    connected,
+    accountEquity,
+  };
+
   const connect = useCallback(async () => {
-    await new Promise((r) => setTimeout(r, 500));
-    setWallet({ ...MOCK_WALLET, connected: true });
-  }, []);
+    await walletConnect();
+  }, [walletConnect]);
 
   const disconnect = useCallback(() => {
-    setWallet({ address: null, connected: false, accountEquity: 0 });
-  }, []);
+    viewWallet();
+  }, [viewWallet]);
 
   return { chain, wallet, connect, disconnect };
 }
@@ -280,7 +369,6 @@ export function usePriceHistory(symbol: string): UsePriceHistoryReturn {
   const basePrice = symbol.startsWith("BTC") ? 42000 : symbol.startsWith("ETH") ? 2200 : 98;
   const [data, setData] = useState(() => generatePriceData(100, basePrice));
 
-  // Append a new tick every 2 seconds
   useEffect(() => {
     const interval = setInterval(() => {
       setData((prev) => {
@@ -296,9 +384,7 @@ export function usePriceHistory(symbol: string): UsePriceHistoryReturn {
     return () => clearInterval(interval);
   }, [symbol]);
 
-  const refresh = useCallback(() => {
-    setData(generatePriceData(100, basePrice));
-  }, [basePrice]);
+  const refresh = useCallback(() => setData(generatePriceData(100, basePrice)), [basePrice]);
 
   return { data, refresh };
 }

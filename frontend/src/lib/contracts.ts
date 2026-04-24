@@ -1,15 +1,11 @@
 import { ethers } from "ethers";
 
-// ── Precompile addresses ────────────────────────────────────────────────────
-// These are fixed addresses where Cosmos precompiles are exposed as EVM contracts.
-// Replace with your actual deployed addresses after devnet launch.
-
 export const PRECOMPILE_ADDRESSES = {
-  MARGIN:     "0x0000000000000000000000000000000000000901",
-  SETTLEMENT: "0x0000000000000000000000000000000000000902",
-  ORACLE:     "0x0000000000000000000000000000000000000903",
-  POSITION:   "0x0000000000000000000000000000000000000904",
-  FUNDING:    "0x0000000000000000000000000000000000000905",
+  ORACLE:     "0x0000000000000000000000000000000000000901",
+  FUNDING:    "0x0000000000000000000000000000000000000902",
+  POSITION:   "0x0000000000000000000000000000000000000903",
+  MARGIN:     "0x0000000000000000000000000000000000000904",
+  SETTLEMENT: "0x0000000000000000000000000000000000000905",
 } as const;
 
 // ── ABIs ────────────────────────────────────────────────────────────────────
@@ -33,6 +29,16 @@ const POSITION_ABI = [
   "function getPosition(address owner, bytes32 marketId) view returns (int256 size, uint256 avgEntryPrice, uint256 margin)",
 ];
 
+// ── Provider helper ─────────────────────────────────────────────────────────
+
+function getProvider(): ethers.BrowserProvider {
+  const win = window as any;
+  if (!win.ethereum) {
+    throw new Error("No EVM wallet detected. Please install Metamask or use the Initia wallet.");
+  }
+  return new ethers.BrowserProvider(win.ethereum);
+}
+
 // ── Contract factories ──────────────────────────────────────────────────────
 
 export function getMarginContract(signer: ethers.Signer) {
@@ -53,21 +59,12 @@ export function getPositionContract(provider: ethers.Provider) {
 
 // ── High-level actions ──────────────────────────────────────────────────────
 
-/**
- * Deposit USDC collateral into the margin module.
- * amount is in USDC with 6 decimals (e.g. 1000_000000 = $1,000)
- */
 export async function depositCollateral(signer: ethers.Signer, amount: bigint) {
   const contract = getMarginContract(signer);
   const tx = await contract.deposit(amount);
   return tx.wait();
 }
 
-/**
- * Open a perpetual position via the settlement precompile.
- * size > 0 = long, size < 0 = short
- * price is 18dp scaled (use ethers.parseEther for dollar amounts)
- */
 export async function openPosition(
   signer: ethers.Signer,
   market: string,
@@ -80,10 +77,6 @@ export async function openPosition(
   return tx.wait();
 }
 
-/**
- * Fetch the mark price for a market from the oracle precompile.
- * Returns price as a number (divided back from 18dp).
- */
 export async function getMarkPrice(
   provider: ethers.Provider,
   market: string,
@@ -94,10 +87,6 @@ export async function getMarkPrice(
   return Number(ethers.formatEther(price));
 }
 
-/**
- * Get the health ratio for an account (1.0 = at maintenance margin).
- * Returns as a number (divided back from 18dp).
- */
 export async function getHealthRatio(
   provider: ethers.Provider,
   address: string,
@@ -109,4 +98,12 @@ export async function getHealthRatio(
   );
   const ratio = await contract.getHealthRatio(address);
   return Number(ethers.formatEther(ratio));
+}
+
+// ── EVM signer helper (used by hooks/index.ts) ──────────────────────────────
+
+export async function getEvmSigner(): Promise<ethers.Signer> {
+  const provider = getProvider();
+  await provider.send("eth_requestAccounts", []);
+  return provider.getSigner();
 }

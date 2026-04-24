@@ -4,17 +4,26 @@ import { ArrowRight, Zap, Shield, Network, Activity, Database, Lock } from "luci
 import { Button } from "./Button";
 import { DataCard } from "./DataCard";
 import { CircuitPattern } from "./CircuitPattern";
+import { usePerpilizeWallet } from "../lib/wallet";
 import { LineChart, Line, ResponsiveContainer, AreaChart, Area } from "recharts";
 import { useChain } from "../hooks";
 import { generateLatencyData, generateThroughputData } from "../utils/mockData";
 import Logoimg from "../assets/Perpilelogo.png";
 
 export function LandingPage({ onEnterApp }: { onEnterApp: () => void }) {
+  const { connected, connect } = usePerpilizeWallet();
   const { chain } = useChain();
 
   // Generated once on mount — stable across renders
   const latencyData  = useMemo(() => generateLatencyData(50),  []);
   const throughputData = useMemo(() => generateThroughputData(50), []);
+
+  const handleEnter = async () => {
+    if (!connected) {
+      await connect();
+    }
+    onEnterApp();
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -36,7 +45,7 @@ export function LandingPage({ onEnterApp }: { onEnterApp: () => void }) {
             <a href="#architecture" className="text-sm text-foreground/80 hover:text-foreground">Architecture</a>
             <a href="#features"     className="text-sm text-foreground/80 hover:text-foreground">Features</a>
             <a href="#access"       className="text-sm text-foreground/80 hover:text-foreground">Access</a>
-            <Button onClick={onEnterApp}>Enter Platform</Button>
+            <Button onClick={handleEnter}>Enter Platform</Button>
           </div>
         </div>
       </motion.nav>
@@ -70,7 +79,7 @@ export function LandingPage({ onEnterApp }: { onEnterApp: () => void }) {
             </p>
 
             <div className="flex items-center gap-4">
-              <Button size="lg" onClick={onEnterApp}>
+              <Button size="lg" onClick={handleEnter}>
                 Access Platform <ArrowRight className="ml-2 h-4 w-4" />
               </Button>
               <Button size="lg" variant="outline">Documentation</Button>
@@ -237,7 +246,7 @@ export function LandingPage({ onEnterApp }: { onEnterApp: () => void }) {
               Portfolio margin, sub-millisecond execution, and compliance-ready controls.
             </p>
             <div className="flex items-center justify-center gap-4">
-              <Button size="lg" onClick={onEnterApp}>Access Platform <ArrowRight className="ml-2 h-4 w-4" /></Button>
+              <Button size="lg" onClick={handleEnter}>Access Platform <ArrowRight className="ml-2 h-4 w-4" /></Button>
               <Button size="lg" variant="outline">Request Access</Button>
             </div>
           </motion.div>

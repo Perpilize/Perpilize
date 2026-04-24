@@ -8,7 +8,8 @@ import { RiskDashboard }      from "./RiskDashboard";
 import { AdminConsole }       from "./AdminConsole";
 import { cn }                 from "../lib/utils";
 import { useChain }           from "../hooks";
-import { formatUSD, truncateAddress } from "../lib/utils";
+import { usePerpilizeWallet } from "../lib/wallet";
+import { formatUSD } from "../lib/utils";
 
 type View = "trading" | "portfolio" | "subaccounts" | "funding" | "activity" | "settings" | "admin" | "risk";
 
@@ -26,6 +27,7 @@ const NAV = [
 export function ExchangeApp({ onBackToLanding }: { onBackToLanding: () => void }) {
   const [activeView,       setActiveView]       = useState<View>("trading");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const { connected, connect, shortAddress, viewWallet } = usePerpilizeWallet();
   const { chain, wallet } = useChain();
 
   const renderView = () => {
@@ -93,22 +95,36 @@ export function ExchangeApp({ onBackToLanding }: { onBackToLanding: () => void }
 
         {/* User */}
         <div className="border-t border-sidebar-border p-4">
-          <div className="flex items-center gap-3">
-            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-ultramarine-100 dark:bg-ultramarine-900/30">
-              <span className="text-sm font-medium text-ultramarine-700 dark:text-ultramarine-300">IN</span>
-            </div>
-            {!sidebarCollapsed && (
-              <div className="flex-1 overflow-hidden">
-                <p className="truncate text-xs font-medium text-sidebar-foreground">
-                  {wallet.address ? truncateAddress(wallet.address) : "Not connected"}
-                </p>
-                <button onClick={onBackToLanding} className="text-xs text-muted-foreground hover:text-sidebar-foreground">
-                  Back to landing
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
+  <div className="flex items-center gap-3">
+    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-ultramarine-100 dark:bg-ultramarine-900/30">
+      <span className="text-sm font-medium text-ultramarine-700 dark:text-ultramarine-300">
+        {connected ? shortAddress?.slice(0, 2).toUpperCase() : "??"}
+      </span>
+    </div>
+    {!sidebarCollapsed && (
+      <div className="flex-1 overflow-hidden">
+        {connected ? (
+          <>
+            <p className="truncate text-xs font-medium text-sidebar-foreground">{shortAddress}</p>
+            <button onClick={viewWallet} className="text-xs text-muted-foreground hover:text-sidebar-foreground">
+              Manage wallet
+            </button>
+          </>
+        ) : (
+          <button
+            onClick={connect}
+            className="text-xs font-medium text-ultramarine-400 hover:text-ultramarine-300"
+          >
+            Connect Wallet
+          </button>
+        )}
+        <button onClick={onBackToLanding} className="block text-xs text-muted-foreground hover:text-sidebar-foreground">
+          Back to landing
+        </button>
+      </div>
+    )}
+  </div>
+</div>
       </motion.aside>
 
       {/* Main */}

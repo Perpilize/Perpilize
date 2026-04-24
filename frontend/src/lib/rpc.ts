@@ -1,14 +1,13 @@
-// ── Network endpoints ───────────────────────────────────────────────────────
-// Switch between devnet / testnet by changing NETWORK
+
 
 const NETWORKS = {
   devnet: {
-    chainId:     "perpilize-1",
-    rpcUrl:      "http://localhost:26657",
-    evmRpcUrl:   "http://localhost:8545",
-    restUrl:     "http://localhost:1317",
-    wsUrl:       "ws://localhost:8080",
-    explorerUrl: "",
+    chainId:     "initiation-2",                           
+    rpcUrl:      "https://rpc.initiation-2.initia.xyz",   
+    evmRpcUrl:   "https://evm-rpc.initiation-2.initia.xyz",
+    restUrl:     "https://lcd.initiation-2.initia.xyz",   
+    wsUrl:       "wss://ws.initiation-2.initia.xyz",
+    explorerUrl: "https://scan.testnet.initia.xyz/initiation-2",
   },
   testnet: {
     chainId:     "perpilize-testnet-1",
@@ -23,7 +22,6 @@ const NETWORKS = {
 export const NETWORK = (import.meta.env.VITE_NETWORK as keyof typeof NETWORKS) ?? "devnet";
 export const { chainId, rpcUrl, evmRpcUrl, restUrl, wsUrl, explorerUrl } = NETWORKS[NETWORK];
 
-// ── Live data subscription ──────────────────────────────────────────────────
 
 export interface TradeEvent {
   market:    string;
