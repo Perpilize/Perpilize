@@ -337,7 +337,7 @@ export function useChain(): UseChainReturn {
     }
 
     fetchBalance();
-    const interval = setInterval(fetchBalance, 10_000); // refresh every 10s
+    const interval = setInterval(fetchBalance, 10_000); 
     return () => clearInterval(interval);
   }, [address]);
 
