@@ -2,7 +2,6 @@
 
 **Institutional-Grade Perpetual Futures Exchange on Initia**
 
-Built for the [HashKey Chain On-Chain Horizon Hackathon](https://dorahacks.io) — PayFi + ZKID tracks.
 
 ---
 

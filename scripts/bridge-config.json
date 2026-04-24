@@ -1,0 +1,12 @@
+{
+  "challenger": "init1qysut6d0pt4kw4v9lrwffk99tpfj3jzy8v84g7",
+  "proposer": "init1qysut6d0pt4kw4v9lrwffk99tpfj3jzy8v84g7",
+  "submission_interval": "3600s",
+  "finalization_period": "3600s",
+  "submission_start_height": "1",
+  "batch_info": {
+    "submitter": "init1qysut6d0pt4kw4v9lrwffk99tpfj3jzy8v84g7",
+    "chain_type": "INITIA"
+  },
+  "metadata": "{\"platform\":\"minievm\",\"evm_chain_id\":\"42101\",\"fee_denom\":\"uusdc\"}"
+}
