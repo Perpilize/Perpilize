@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { TrendingUp, Wallet, Users, Activity, Clock, Settings, ShieldCheck, BarChart3, Network, Menu, X } from "lucide-react";
+import { TrendingUp, Wallet, Users, Activity, Clock, Settings, ShieldCheck, BarChart3, Menu, X } from "lucide-react";
 import { TradingTerminal }    from "./TradingTerminal";
 import { PortfolioMargin }    from "./PortfolioMargin";
 import { SubaccountsManager } from "./SubaccountsManager";
