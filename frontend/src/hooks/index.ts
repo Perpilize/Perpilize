@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback } from "react";
 import type {
   Market, Position, Order, OrderRequest, PortfolioAsset,
   ExposureEntry, MarginSummary, RiskMetrics, PositionRisk,
